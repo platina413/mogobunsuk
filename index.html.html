@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>모의고사 출제 의도 및 정답률 자동 분석기</title>
+    <!-- Bootstrap 5.3 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Pretendard 폰트 & Bootstrap Icons -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <!-- PDF.js, SheetJS, html2canvas 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        :root {
+            --bg-main: #f1f5f9;
+            --card-bg: #ffffff;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --text-title: #0f172a;
+            --text-body: #475569;
+            --border-color: #e2e8f0;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            color: var(--text-body);
+            padding: 40px 20px;
+        }
+
+        .main-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+            padding: 36px;
+        }
+
+        .header-title {
+            color: var(--text-title);
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .subject-select-card {
+            background-color: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 18px 20px;
+        }
+
+        .form-select-custom {
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            padding: 10px 14px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1e293b;
+            box-shadow: none !important;
+        }
+
+        .form-select-custom:focus {
+            border-color: var(--primary-color);
+        }
+
+        .warning-notice-box {
+            margin-top: 12px;
+            background-color: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            border-radius: 8px;
+            padding: 9px 14px;
+            color: #dc2626;
+            font-size: 0.86rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 14px;
+            padding: 24px 16px;
+            text-align: center;
+            background-color: #f8fafc;
+            cursor: pointer;
+            transition: all 0.25s ease-in-out;
+            position: relative;
+        }
+
+        .drop-zone:hover {
+            border-color: var(--primary-color);
+            background-color: #eff6ff;
+            transform: translateY(-2px);
+        }
+
+        .drop-zone.loaded {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+
+        .icon-box {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+        }
+
+        .pdf-box { background-color: #dbeafe; color: #1d4ed8; }
+        .xlsx-box { background-color: #dcfce7; color: #15803d; }
+        
+        .drop-zone.loaded .icon-box {
+            background-color: #bbf7d0;
+            color: #166534;
+        }
+
+        .btn-custom {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 32px;
+            font-weight: 700;
+            font-size: 1rem;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+            transition: all 0.2s ease;
+        }
+
+        .btn-custom:hover:not(:disabled) {
+            background: linear-gradient(135deg, #1d4ed8, #1e40af);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+        }
+
+        .btn-custom:disabled {
+            background: #cbd5e1;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .summary-card {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px 20px;
+        }
+
+        .custom-table-container {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table thead th {
+            background-color: #f8fafc;
+            color: #64748b;
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .table tbody td {
+            padding: 8px 16px;
+            color: #334155;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.95rem;
+        }
+
+        .table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .badge-q {
+            background-color: #f1f5f9;
+            color: #334155;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.82rem;
+            border: 1px solid #cbd5e1;
+        }
+
+        .badge-grade {
+            display: inline-block;
+            width: 36px;
+            height: 26px;
+            line-height: 26px;
+            text-align: center;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 0.88rem;
+        }
+
+        .grade-A { background-color: #dcfce7; color: #166534; }
+        .grade-B { background-color: #dbeafe; color: #1e40af; }
+        .grade-C { background-color: #fef9c3; color: #854d0e; }
+        .grade-D { background-color: #ffedd5; color: #9a3412; }
+        .grade-E { background-color: #ffe4e6; color: #9f1239; }
+        .grade-none { background-color: #f1f5f9; color: #94a3b8; }
+
+        .footer-credit {
+            margin-top: 36px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+        
+        .footer-combined {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 0.8rem;
+            padding: 6px 16px;
+            border-radius: 20px;
+        }
+        
+        .footer-divider {
+            color: #cbd5e1;
+            font-weight: 300;
+        }
+
+        #exportImageTarget {
+            padding: 10px;
+            background-color: #ffffff;
+            border-radius: 16px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" style="max-width: 900px;">
+    <div class="main-card">
+        <!-- 헤더 영역 -->
+        <div class="text-center mb-4">
+            <h2 class="header-title mb-2">모의고사 출제 의도 및 정답률 자동 분석기</h2>
+            <p class="text-muted fs-6 mb-0">모의고사 해설지 파일(PDF) 과 답지반응률 파일(xlsx)를 업로드하면 해당 과목의 정답률이 자동으로 추출됩니다 :) </p>
+        </div>
+
+        <!-- 최상단: 과목 선택 영역 -->
+        <div class="subject-select-card mb-4">
+            <label for="subjectSelect" class="form-label fw-bold text-dark mb-2">
+                <i class="bi bi-bookmark-star-fill text-primary me-1"></i> 분석 대상 과목 선택
+            </label>
+            <select class="form-select form-select-custom" id="subjectSelect" onchange="checkReady()">
+                <option value="" selected disabled>-- 분석할 과목을 선택하세요 --</option>
+                <option value="국어">국어</option>
+                <option value="수학">수학</option>
+                <option value="영어">영어</option>
+                <option value="한국사">한국사</option>
+                <option value="사회탐구">사회탐구</option>
+                <option value="과학탐구">과학탐구</option>
+            </select>
+
+            <div class="warning-notice-box">
+                <i class="bi bi-exclamation-triangle-fill flex-shrink-0 fs-6"></i>
+                <span>분석할 과목을 올바르게 선택했는지 한 번 더 확인 부탁드립니다. 불일치 시 분석 오류가 발생할 수 있어요 :(</span>
+            </div>
+        </div>
+
+        <!-- 파일 드롭존 영역 -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="drop-zone" id="pdfDropZone" onclick="document.getElementById('pdfInput').click()">
+                    <div class="icon-box pdf-box" id="pdfIcon">
+                        <i class="bi bi-file-earmark-pdf-fill"></i>
+                    </div>
+                    <h6 class="fw-bold text-dark mb-1">1. 모의고사 해설지 (PDF)</h6>
+                    <p class="text-muted small mb-0" id="pdfFileName">클릭하거나 모의고사 해설지 PDF를 올려주세요</p>
+                    <input type="file" id="pdfInput" accept="application/pdf" style="display: none;" onchange="handlePdf(this.files[0])">
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="drop-zone" id="xlsxDropZone" onclick="document.getElementById('xlsxInput').click()">
+                    <div class="icon-box xlsx-box" id="xlsxIcon">
+                        <i class="bi bi-file-earmark-excel-fill"></i>
+                    </div>
+                    <h6 class="fw-bold text-dark mb-1">2. 답지반응률 파일 (XLSX)</h6>
+                    <p class="text-muted small mb-0" id="xlsxFileName">클릭하거나 XLSX 파일을 올려주세요</p>
+                    <input type="file" id="xlsxInput" accept=".xlsx, .xls" style="display: none;" onchange="handleXlsx(this.files[0])">
+                </div>
+            </div>
+        </div>
+
+        <!-- 버튼 영역 -->
+        <div class="text-center mb-4">
+            <button class="btn btn-custom" id="analyzeBtn" onclick="processAnalysis()" disabled>
+                <i class="bi bi-magic me-2"></i>데이터 분석 실행
+            </button>
+        </div>
+
+        <!-- 로딩 애니메이션 -->
+        <div id="loading" class="text-center my-4" style="display: none;">
+            <div class="spinner-border text-primary mb-2" role="status" style="width: 2.2rem; height: 2.2rem;"></div>
+            <p class="text-dark fw-bold mb-0" id="loadingText">문서 파싱 및 정답률 데이터 연동 중...</p>
+        </div>
+
+        <!-- 대시보드 결과 영역 -->
+        <div id="resultSection" style="display: none;">
+            <hr class="my-4" style="border-color: var(--border-color);">
+
+            <!-- 정렬 및 다운로드 컨트롤 바 -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold active" id="btnSortNum" onclick="sortData('num')">
+                        <i class="bi bi-sort-numeric-down me-1"></i>문항순 정렬
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" id="btnSortGrade" onclick="sortData('grade')">
+                        <i class="bi bi-sort-alpha-down me-1"></i>정답률 오름차순 (A-E)
+                    </button>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary fw-bold px-3" onclick="exportToImage()">
+                        <i class="bi bi-file-earmark-image me-1"></i>이미지(PNG)로 저장
+                    </button>
+                    <button class="btn btn-sm btn-success fw-bold px-3" onclick="exportToExcel()">
+                        <i class="bi bi-file-earmark-excel me-1"></i>엑셀로 다운로드
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 이미지 캡처 대상 영역 -->
+            <div id="exportImageTarget">
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <div class="summary-card d-flex align-items-center">
+                            <div class="rounded-circle p-2 bg-white border me-3 text-primary fs-5">
+                                <i class="bi bi-journal-bookmark-fill"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small fw-bold">선택된 과목</div>
+                                <div class="fs-5 fw-bold text-dark" id="extractedSubject">-</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="summary-card d-flex align-items-center">
+                            <div class="rounded-circle p-2 bg-white border me-3 text-success fs-5">
+                                <i class="bi bi-check-circle-fill"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small fw-bold">연동 완료 문항</div>
+                                <div class="fs-5 fw-bold text-dark"><span id="totalCount">0</span> <span class="fs-6 fw-normal text-muted">개</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 분석 결과 데이터 테이블 -->
+                <div class="custom-table-container">
+                    <table class="table align-middle" id="resultTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 15%;" class="text-center">문항</th>
+                                <th>출제의도</th>
+                                <th style="width: 20%;" class="text-center">학교 정답률</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 푸터 -->
+        <div class="footer-credit">
+            <div class="footer-combined">
+                <i class="bi bi-shield-lock-fill text-warning"></i>
+                <span>본 프로그램은 대동고등학교 내에서만 사용해 주시기 바라며, 외부 유출을 금합니다.</span>
+                <span class="footer-divider">|</span>
+                <span>Designed & Developed by 유지인(대동고등학교)</span>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+let pdfFile = null;
+let xlsxFile = null;
+let pdfIntents = [];
+let excelSchoolGrades = {};
+let selectedSubject = '';
+let currentCombinedData = [];
+
+const TARGET_SUBJECTS = ['국어', '수학', '영어', '한국사', '사회탐구', '과학탐구'];
+
+setupDropZone('pdfDropZone', 'pdfInput', (file) => handlePdf(file));
+setupDropZone('xlsxDropZone', 'xlsxInput', (file) => handleXlsx(file));
+
+function setupDropZone(zoneId, inputId, handleFn) {
+    const zone = document.getElementById(zoneId);
+    zone.addEventListener('dragover', (e) => e.preventDefault());
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length > 0) handleFn(e.dataTransfer.files[0]);
+    });
+}
+
+function handlePdf(file) {
+    if (!file || file.type !== 'application/pdf') return alert('PDF 파일만 업로드 가능합니다.');
+    pdfFile = file;
+    document.getElementById('pdfFileName').innerText = file.name;
+    document.getElementById('pdfDropZone').classList.add('loaded');
+    document.getElementById('pdfIcon').innerHTML = '<i class="bi bi-check-lg"></i>';
+    checkReady();
+}
+
+function handleXlsx(file) {
+    if (!file) return;
+    xlsxFile = file;
+    document.getElementById('xlsxFileName').innerText = file.name;
+    document.getElementById('xlsxDropZone').classList.add('loaded');
+    document.getElementById('xlsxIcon').innerHTML = '<i class="bi bi-check-lg"></i>';
+    checkReady();
+}
+
+function checkReady() {
+    selectedSubject = document.getElementById('subjectSelect').value;
+    if (selectedSubject && pdfFile && xlsxFile) {
+        document.getElementById('analyzeBtn').disabled = false;
+    } else {
+        document.getElementById('analyzeBtn').disabled = true;
+    }
+}
+
+async function processAnalysis() {
+    if (!selectedSubject) return alert('과목을 선택해 주세요.');
+    
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('resultSection').style.display = 'none';
+
+    try {
+        const pdfText = await readPdfText(pdfFile);
+        pdfIntents = parseIntents(pdfText);
+
+        excelSchoolGrades = await readXlsxSchoolGrades(xlsxFile, selectedSubject);
+
+        currentCombinedData = pdfIntents.map(item => ({
+            qNum: item.qNum,
+            intentText: item.intentText,
+            grade: excelSchoolGrades[item.qNum] || '-'
+        }));
+
+        displayResults();
+    } catch (err) {
+        alert('분석 도중 오류가 발생했습니다: ' + err.message);
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
+async function readPdfText(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        let lastY, text = '';
+        for (let item of textContent.items) {
+            if (lastY !== undefined && Math.abs(item.transform[5] - lastY) > 5) {
+                text += '\n';
+            }
+            text += item.str + ' ';
+            lastY = item.transform[5];
+        }
+        fullText += text + '\n';
+    }
+    return fullText;
+}
+
+// 안전하고 정확한 [출제의도] 문장 파싱 로직
+function parseIntents(text) {
+    const regex = /(\d+)\s*\.\s*\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?)(?=\r?\n\s*\[|\r?\n\s*\d+\s*\.|$)/g;
+    let matches = [];
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+        const qNum = parseInt(match[1]);
+        let rawContent = match[2].trim();
+        
+        let intentText = rawContent.split(/\r?\n/)[0].trim();
+        intentText = intentText.replace(/^\[.*?\]/, '').trim();
+
+        if (qNum >= 1 && qNum <= 80 && intentText.length > 0) {
+            matches.push({ qNum, intentText });
+        }
+    }
+
+    const uniqueMap = new Map();
+    matches.forEach(m => {
+        if (!uniqueMap.has(m.qNum)) uniqueMap.set(m.qNum, m.intentText);
+    });
+
+    return Array.from(uniqueMap.entries())
+                .map(([qNum, intentText]) => ({ qNum, intentText }))
+                .sort((a, b) => a.qNum - b.qNum);
+}
+
+// 오직 '학교' 정답률만 정확하게 탐색하여 읽어오는 정밀 파싱 함수
+function readXlsxSchoolGrades(file, targetSubject) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                let gradeMap = {};
+
+                for (let sheetName of workbook.SheetNames) {
+                    const sheet = workbook.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+                    let areaColIdx = -1;
+                    let qNumColIdx = -1;
+                    let schoolColIdx = -1;
+
+                    // 헤더(열 위치) 정밀 검색
+                    for (let r = 0; r < Math.min(20, rows.length); r++) {
+                        const row = rows[r];
+                        if (!row) continue;
+
+                        row.forEach((cell, cIdx) => {
+                            const val = String(cell || '').replace(/\s+/g, '');
+                            if (val.includes('영역') || val.includes('과목') || val.includes('교과')) {
+                                if (areaColIdx === -1) areaColIdx = cIdx;
+                            }
+                            if (val.includes('문항') || val.includes('번호') || val === 'NO' || val.includes('문번호')) {
+                                if (qNumColIdx === -1) qNumColIdx = cIdx;
+                            }
+                            // '학교'라는 단어가 명확하게 들어간 열만 찾습니다 (전국, 전국정답률 등 완전 제외)
+                            if (val.includes('학교') && !val.includes('전국')) {
+                                schoolColIdx = cIdx;
+                            }
+                        });
+                    }
+
+                    if (qNumColIdx === -1) qNumColIdx = 1;
+
+                    let currentArea = '';
+
+                    for (let r = 0; r < rows.length; r++) {
+                        const row = rows[r];
+                        if (!row || row.length === 0) continue;
+
+                        const rowText = row.map(c => String(c || '').replace(/\s+/g, '')).join(' ');
+
+                        // 영역명 업데이트
+                        if (areaColIdx !== -1 && row[areaColIdx]) {
+                            const cellArea = String(row[areaColIdx]).replace(/\s+/g, '');
+                            if (cellArea) currentArea = cellArea;
+                        }
+
+                        for (let subj of TARGET_SUBJECTS) {
+                            if (rowText.includes(subj)) {
+                                currentArea = subj;
+                                break;
+                            }
+                        }
+
+                        let isTargetRow = false;
+                        if (targetSubject === '한국사') {
+                            if (currentArea.includes('한국사') || rowText.includes('한국사')) {
+                                isTargetRow = true;
+                            }
+                        } else {
+                            if (currentArea.includes(targetSubject)) {
+                                isTargetRow = true;
+                            }
+                        }
+
+                        if (isTargetRow) {
+                            const qNumVal = parseInt(String(row[qNumColIdx]).trim());
+
+                            if (!isNaN(qNumVal) && qNumVal >= 1 && qNumVal <= 80) {
+                                if (targetSubject === '한국사' && qNumVal > 20) continue;
+
+                                let extractedGrade = '';
+
+                                // 1. 헤더에서 '학교' 컬럼 위치를 명확히 잡았을 때
+                                if (schoolColIdx !== -1 && row[schoolColIdx] !== undefined) {
+                                    const val = String(row[schoolColIdx]).trim().toUpperCase();
+                                    if (/^[A-E]$/.test(val)) {
+                                        extractedGrade = val;
+                                    }
+                                }
+
+                                // 2. 만약 헤더 명칭으로 위치를 못 잡은 경우, '학교' 열은 통상 '전국' 열보다 먼저 오므로
+                                // 행 전체에서 A-E 등급이 나오는 첫 번째 셀('학교' 값)을 가져옵니다.
+                                if (!extractedGrade) {
+                                    for (let c = 0; c < row.length; c++) {
+                                        // 영역이나 문항번호 열은 탐색에서 제외
+                                        if (c === areaColIdx || c === qNumColIdx) continue;
+                                        const val = String(row[c] || '').trim().toUpperCase();
+                                        if (/^[A-E]$/.test(val)) {
+                                            extractedGrade = val;
+                                            break; // 첫 번째 발견된 A-E(학교)만 취하고 바로 멈춤
+                                        }
+                                    }
+                                }
+
+                                if (extractedGrade) {
+                                    gradeMap[qNumVal] = extractedGrade;
+                                }
+                            }
+                        }
+                    }
+                }
+                resolve(gradeMap);
+            } catch (err) {
+                reject(err);
+            }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+function sortData(type) {
+    if (type === 'num') {
+        currentCombinedData.sort((a, b) => a.qNum - b.qNum);
+        document.getElementById('btnSortNum').classList.add('active');
+        document.getElementById('btnSortGrade').classList.remove('active');
+    } else if (type === 'grade') {
+        currentCombinedData.sort((a, b) => {
+            if (a.grade === '-' && b.grade !== '-') return 1;
+            if (a.grade !== '-' && b.grade === '-') return -1;
+            if (a.grade === b.grade) return a.qNum - b.qNum;
+            return a.grade.localeCompare(b.grade);
+        });
+        document.getElementById('btnSortGrade').classList.add('active');
+        document.getElementById('btnSortNum').classList.remove('active');
+    }
+    renderTable();
+}
+
+function exportToImage() {
+    const targetElement = document.getElementById('exportImageTarget');
+    if (!targetElement || currentCombinedData.length === 0) return alert('저장할 데이터가 없습니다.');
+
+    html2canvas(targetElement, {
+        scale: 2,
+        backgroundColor: '#ffffff'
+    }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `${selectedSubject}_출제의도_정답률_분석결과.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }).catch(err => {
+        alert('이미지 생성 도중 오류가 발생했습니다: ' + err.message);
+    });
+}
+
+function exportToExcel() {
+    if (currentCombinedData.length === 0) return alert('저장할 데이터가 없습니다.');
+
+    const excelData = currentCombinedData.map(item => ({
+        '문항 번호': `${item.qNum}번`,
+        '출제의도': item.intentText,
+        '학교 정답률': item.grade
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, selectedSubject);
+
+    worksheet['!cols'] = [
+        { wch: 12 },
+        { wch: 50 },
+        { wch: 15 }
+    ];
+
+    const fileName = `${selectedSubject}_출제의도_정답률_분석결과.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+}
+
+function renderTable() {
+    const tbody = document.querySelector('#resultTable tbody');
+    tbody.innerHTML = '';
+
+    if (currentCombinedData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger p-3">추출된 [출제의도] 정보가 없습니다. PDF 파일 구조를 확인해 주세요.</td></tr>';
+    } else {
+        currentCombinedData.forEach(item => {
+            const gradeClass = item.grade !== '-' ? `grade-${item.grade}` : 'grade-none';
+
+            tbody.innerHTML += `
+                <tr>
+                    <td class="text-center"><span class="badge-q">${item.qNum}번</span></td>
+                    <td class="fw-bold">${item.intentText}</td>
+                    <td class="text-center">
+                        <span class="badge-grade ${gradeClass}">${item.grade}</span>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+}
+
+function displayResults() {
+    document.getElementById('extractedSubject').innerText = selectedSubject;
+    document.getElementById('totalCount').innerText = currentCombinedData.length;
+    
+    sortData('num');
+    
+    document.getElementById('resultSection').style.display = 'block';
+}
+</script>
+</body>
+</html>
