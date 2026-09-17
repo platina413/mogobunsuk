@@ -530,7 +530,7 @@ function parseIntents(text, subject) {
     const uniqueMap = new Map();
     const cleanText = text.replace(/\r\n/g, '\n');
 
-    const regex = /(?:\[\s*(\d+)\s*[\~\-～]\s*(\d+)\s*\]|\[\s*0*(\d+)\s*\]|\b0*(\d+)\s*\.)[\s\S]*?\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?)(?=(?:\[\s*해\s*설\s*\]|\[\s*정\s*답\s*\]|\[\s*오\s*답\s*\]|\n\s*\[?\s*\d+[\.\s\]]|$))/g;
+    const regex = /(?:\[\s*(\d+)\s*[\~\-～,]\s*(\d+)\s*\]|\[\s*0*(\d+)\s*\]|\b0*(\d+)\s*[\.\)])[\s\S]*?\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?)(?=(?:\[\s*해\s*설\s*\]|\[\s*정\s*답\s*\]|\[\s*오\s*답\s*\]|\[\s*대\s*본\s*\]|\n\s*\[?\s*\d+[\.\s\~\-～\]]|$))/g;
     
     let match;
     while ((match = regex.exec(cleanText)) !== null) {
@@ -552,12 +552,21 @@ function parseIntents(text, subject) {
     }
 
     if (uniqueMap.size < maxQuestions) {
-        const fallbackRegex = /0*(\d+)\s*[\.\)]\s*\[\s*출\s*제\s*의\s*도\s*\]\s*([^\n]+)/g;
+        const fallbackRegex = /(?:\[?\s*(\d+)\s*[\~\-～,]\s*(\d+)\s*\]?|\b0*(\d+)\b)\s*[\.\)]?\s*\[\s*출\s*제\s*의\s*도\s*\]\s*([^\n]+)/g;
         while ((match = fallbackRegex.exec(cleanText)) !== null) {
-            const qNum = parseInt(match[1]);
-            const cleanedIntent = cleanIntentText(match[2], subject);
-            if (!isNaN(qNum) && qNum >= 1 && qNum <= maxQuestions && cleanedIntent) {
-                if (!uniqueMap.has(qNum)) uniqueMap.set(qNum, cleanedIntent);
+            const startQ = parseInt(match[1]);
+            const endQ = parseInt(match[2]);
+            const singleQ = parseInt(match[3]);
+            const cleanedIntent = cleanIntentText(match[4], subject);
+
+            if (!cleanedIntent) continue;
+
+            if (!isNaN(startQ) && !isNaN(endQ) && startQ <= maxQuestions) {
+                for (let q = startQ; q <= Math.min(endQ, maxQuestions); q++) {
+                    if (!uniqueMap.has(q)) uniqueMap.set(q, cleanedIntent);
+                }
+            } else if (!isNaN(singleQ) && singleQ >= 1 && singleQ <= maxQuestions) {
+                if (!uniqueMap.has(singleQ)) uniqueMap.set(singleQ, cleanedIntent);
             }
         }
     }
@@ -567,45 +576,49 @@ function parseIntents(text, subject) {
                 .sort((a, b) => a.qNum - b.qNum);
 }
 
-// 한국사/탐구 지문 기호((가), ㄱ 등) 및 해설 시작 문장 차단 로직 보완
 function cleanIntentText(text, subject) {
     if (!text) return '';
 
     let cleaned = text.replace(/\s+/g, ' ').trim();
 
-    // 1. [해설], [정답] 등 섹션 분리 태그가 존재할 경우 자르기
-    cleaned = cleaned.split(/\[\s*(?:해\s*설|정\s*답|오\s*답\s*피\s*하기|출\s*제\s*영\s*역)\s*\]/)[0].trim();
+    // 1. [해설], [정답], [대본] 등 태그 및 < 보기 >, <보기> 시작 지점 이전으로 자르기
+    cleaned = cleaned.split(/\[\s*(?:해\s*설|정\s*답|오\s*답\s*피\s*하기|출\s*제\s*영\s*역|대\s*본|소\s*재)\s*\]/)[0].trim();
+    cleaned = cleaned.split(/<\s*보\s*기\s*>/)[0].trim();
+    cleaned = cleaned.split(/<\s*조\s*건\s*>/)[0].trim();
 
-    // 2. 국어 과목 종결 처리
+    // 2. 국어 과목 특화 종결 키워드 파이프라인
     if (subject === '국어') {
-        const korIdx = cleaned.search(/(파악|이해|적용|추론|비판|분석|감상|비교|반영|생성|구상|점검|조율|수정|활용|인지)/);
-        if (korIdx !== -1) {
-            const wordMatch = cleaned.substring(korIdx).match(/^(파악|이해|적용|추론|비판|분석|감상|비교|반영|생성|구상|점검|조율|수정|활용|인지)/);
+        const korVerbRegex = /(수립|제시|파악|이해|적용|추론|비판|분석|감상|비교|반영|생성|구상|점검|조율|수정|활용|인지|평가|설명)/;
+        const match = cleaned.match(korVerbRegex);
+        if (match && match.index !== undefined) {
+            return cleaned.substring(0, match.index + match[0].length).trim();
+        }
+    }
+
+    // 3. 영어 과목 종결 처리
+    if (subject === '영어') {
+        const engVerbIdx = cleaned.search(/(파악|이해|추론|찾기|완성|듣고|선택|파악하기|이해하기|추론하기)/);
+        if (engVerbIdx !== -1) {
+            const wordMatch = cleaned.substring(engVerbIdx).match(/^(파악하기|이해하기|추론하기|찾기|완성하기|파악|이해|추론|선택|듣고)/);
             if (wordMatch) {
-                return cleaned.substring(0, korIdx + wordMatch[0].length).trim();
+                return cleaned.substring(0, engVerbIdx + wordMatch[0].length).trim();
             }
         }
     }
 
-    // 3. 한국사/탐구/수학 명사형 종결 동작어 우선 매칭
-    const verbMatch = cleaned.match(/^.*?(?:설계하기|이해하기|알아보기|구하기|유도하기|비교하기|파악하기|분석하기|적용하기|추론하기|관찰하기|수집하기|분류하기|상관관계|작성하기|설명하기|해석하기|계산하기)/);
-    if (verbMatch) {
-        return verbMatch[0].trim();
+    // 4. 한국사/탐구/수학 명사형 종결 동작어 절단
+    const verbRegex = /(설정하기|설계하기|이해하기|알아보기|구하기|유도하기|비교하기|파악하기|분석하기|적용하기|추론하기|관찰하기|수집하기|분류하기|상관관계|작성하기|설명하기|해석하기|계산하기|탐구하기|증명하기|도출하기)/;
+    const match = cleaned.match(verbRegex);
+    if (match && match.index !== undefined) {
+        return cleaned.substring(0, match.index + match[0].length).trim();
     }
 
-    // 4. 지문 기호((가), (나), ㄱ., ㄴ. 등) 또는 해설용 설명 문장 시작 부분 이전 자르기
-    const symbolOrExplanationIdx = cleaned.search(/(?:\(\s*[가-하A-Za-z0-9]\s*\)|[ㄱ-ㅎ]\.|\b[A-Za-z]{1,3}\b|\b[가-힣]+(?:는|은|이|가)\s+[가-힣]+(?:을|를|에)\s+)/);
-    if (symbolOrExplanationIdx > 3) {
-        cleaned = cleaned.substring(0, symbolOrExplanationIdx).trim();
-    }
-
-    // 일반 문장 마침표 자르기
+    // 마침표 기준 첫 문장만 절단
     const firstDotIdx = cleaned.indexOf('.');
-    if (firstDotIdx !== -1 && firstDotIdx < 80) {
+    if (firstDotIdx !== -1 && firstDotIdx < 100) {
         return cleaned.substring(0, firstDotIdx).trim();
     }
 
-    // 깨진 특수 문자 정리
     return cleaned.replace(/[^가-힣0-9\s\(\)\,\~\-\+\*\/=\<\>A-Za-z]/g, '').trim();
 }
 
