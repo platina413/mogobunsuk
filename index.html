@@ -503,7 +503,6 @@ async function processAnalysis() {
     }
 }
 
-// 명사형 종결 단어 및 줄바꿈 Y좌표 조합 정교 파서
 async function readPdfNounIntents(file, subject) {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -527,20 +526,30 @@ async function readPdfNounIntents(file, subject) {
 
             if (!text) continue;
 
-            // [출제의도] 태그 발견
             if (text.includes('출제') && text.includes('의도')) {
                 currentQList = [];
-                for (let k = Math.max(0, j - 6); k < j; k++) {
-                    const prevStr = items[k].str;
-                    const rangeMatch = prevStr.match(/\[?\s*(\d+)\s*[\~\-～,]\s*(\d+)\s*\]?/);
-                    const singleMatch = prevStr.match(/(?:\[\s*0*(\d+)\s*\]|\b0*(\d+)\b[\.\)]?)/);
-                    
-                    if (rangeMatch) {
-                        const start = parseInt(rangeMatch[1]);
-                        const end = parseInt(rangeMatch[2]);
-                        for (let q = start; q <= end; q++) currentQList.push(q);
-                    } else if (singleMatch) {
-                        const q = parseInt(singleMatch[1] || singleMatch[2]);
+                
+                // 역탐색 범위 내의 아이템 텍스트 결합
+                const searchBackCount = (subject === '영어') ? 35 : ((subject === '수학') ? 12 : 8);
+                const startIdx = Math.max(0, j - searchBackCount);
+                
+                let combinedPrevStr = "";
+                for (let k = startIdx; k < j; k++) {
+                    combinedPrevStr += " " + items[k].str;
+                }
+
+                // 1) [16~17], 16~17 등 범위 패턴 매칭
+                const rangeMatch = combinedPrevStr.match(/\[?\s*(\d{1,2})\s*[\~\-～,]\s*(\d{1,2})\s*\]?/);
+                if (rangeMatch) {
+                    const start = parseInt(rangeMatch[1]);
+                    const end = parseInt(rangeMatch[2]);
+                    for (let q = start; q <= end; q++) currentQList.push(q);
+                } else {
+                    // 2) 단일 문항 번호 패턴 매칭
+                    const matches = [...combinedPrevStr.matchAll(/(?:\[\s*(\d{1,2})\s*\]|(\d{1,2})\s*[\.\)])/g)];
+                    if (matches.length > 0) {
+                        const lastMatch = matches[matches.length - 1];
+                        const q = parseInt(lastMatch[1] || lastMatch[2]);
                         if (q) currentQList.push(q);
                     }
                 }
@@ -552,17 +561,23 @@ async function readPdfNounIntents(file, subject) {
             }
 
             if (isCollecting) {
-                // 줄바꿈 발생 여부 감지 (Y좌표가 5pt 이상 차이나면 줄바꿈으로 인정)
                 const isLineChanged = startY !== null && Math.abs(currentY - startY) > 5;
                 const isExplanationHeader = /\[\s*(해\s*설|정\s*답|오\s*답|대\s*본|소\s*재|풀\s*이)\s*\]/.test(text);
-
-                // 명사형 종결 단어 패턴 감지
-                const nounEnded = /(이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|파악하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기|이해|구하기|탐구|분석|도출|해석|적용|계산|설명|증명|파악|추론|관찰|수집|분류|작성|설정|설계|유도|비교|감상|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택)/.test(collectedText);
+                
+                let nounEnded = false;
+                if (subject === '수학') {
+                    nounEnded = /(계산하기|이해하기|활용하기|추론하기|구하기|탐구하기|분석하기|해석하기|적용하기|설명하기|증명하기|파악하기|활용|이용|계산|이해|구하기|추론)/.test(collectedText);
+                } else if (subject === '영어') {
+                    nounEnded = /(판단하기|완성하기|파악하기|고르기|이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기)/.test(collectedText);
+                } else {
+                    // 과학탐구 등 기타 과목의 종결 패턴 보완 (의사소통하기, 의사소통, 이해하기 등 대응)
+                    nounEnded = /(의사소통하기|의사소통|이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|파악하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기|이해|구하기|탐구|분석|도출|해석|적용|계산|설명|증명|파악|추론|관찰|수집|분류|작성|설정|설계|유도|비교|감상|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택)/.test(collectedText);
+                }
 
                 if (isExplanationHeader || (isLineChanged && nounEnded)) {
                     isCollecting = false;
                     if (collectedText && currentQList.length > 0) {
-                        const finalCleanText = cleanNounIntentText(collectedText);
+                        const finalCleanText = cleanNounIntentText(collectedText, subject);
                         currentQList.forEach(q => {
                             if (q >= 1 && q <= maxQuestions && !uniqueMap.has(q)) {
                                 uniqueMap.set(q, finalCleanText);
@@ -578,7 +593,7 @@ async function readPdfNounIntents(file, subject) {
         }
 
         if (isCollecting && collectedText && currentQList.length > 0) {
-            const finalCleanText = cleanNounIntentText(collectedText);
+            const finalCleanText = cleanNounIntentText(collectedText, subject);
             currentQList.forEach(q => {
                 if (q >= 1 && q <= maxQuestions && !uniqueMap.has(q)) {
                     uniqueMap.set(q, finalCleanText);
@@ -592,19 +607,60 @@ async function readPdfNounIntents(file, subject) {
                 .sort((a, b) => a.qNum - b.qNum);
 }
 
-function cleanNounIntentText(text) {
+function cleanNounIntentText(text, subject) {
     if (!text) return '';
     let cleaned = text.replace(/\s+/g, ' ').trim();
 
-    // 명사형/동작 종결어가 탐지되면 그 단어까지만 깔끔하게 잘라내기
-    const nounEndingRegex = /(이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|파악하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기|이해|구하기|탐구|분석|도출|해석|적용|계산|설명|증명|파악|추론|관찰|수집|분류|작성|설정|설계|유도|비교|감상|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택)/;
-    const match = cleaned.match(nounEndingRegex);
-    if (match && match.index !== undefined) {
-        cleaned = cleaned.substring(0, match.index + match[0].length).trim();
+    if (subject === '수학') {
+        cleaned = cleaned.replace(/활용하여\s*.*$/, '활용').replace(/이용하여\s*.*$/, '활용');
+        
+        const mathEndingRegex = /(계산하기|이해하기|활용하기|추론하기|구하기|탐구하기|분석하기|해석하기|적용하기|설명하기|증명하기|파악하기|활용|이용|계산|이해|구하기|추론)/;
+        const matchMath = cleaned.match(mathEndingRegex);
+        if (matchMath && matchMath.index !== undefined) {
+            cleaned = cleaned.substring(0, matchMath.index + matchMath[0].length).trim();
+        }
+        
+        if (cleaned.endsWith('하여')) {
+            cleaned = cleaned.substring(0, cleaned.length - 2) + '하기';
+        }
+        
+        cleaned = cleaned.replace(/^의\s+/, '').trim();
+    } else if (subject === '영어') {
+        const engEndingRegex = /([\uAC00-\uD7A3\s]+?(?:판단하기|완성하기|파악하기|고르기|이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기))/;
+        const matchEng = cleaned.match(engEndingRegex);
+        if (matchEng) {
+            cleaned = matchEng[1].trim();
+        }
+    } else {
+        // 과학탐구 등 일반 과목 종결 패턴 정제 (의사소통하기/의사소통 및 오탈자 대응)
+        const nounEndingRegex = /(의사소통하기|의사소통|이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|파악하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기|이해|구하기|탐구|분석|도출|해석|적용|계산|설명|증명|파악|추론|관찰|수집|분류|작성|설정|설계|유도|비교|감상|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택)/;
+        const match = cleaned.match(nounEndingRegex);
+        if (match && match.index !== undefined) {
+            cleaned = cleaned.substring(0, match.index + match[0].length).trim();
+        }
     }
 
-    // 깨진 특수문자/수식 외계어 정제
     cleaned = cleaned.replace(/[^가-힣0-9\s\(\)\,\~\-\+\*\/=\<\>A-Za-z]/g, '').trim();
+
+    if (subject === '국어') {
+        let words = cleaned.split(' ');
+        if (words.length > 5) {
+            words = words.slice(0, 5);
+        }
+        
+        let trimmed = words.join(' ');
+        const kNounEndRegex = /(전략|이해|파악|감상|분석|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택|탐구|도출|해석|적용|계산|설명|증명|추론|관찰|수집|분류|작성|설정|설계|유도|비교)$/;
+        
+        while (words.length > 0) {
+            let currentStr = words.join(' ');
+            if (kNounEndRegex.test(currentStr)) {
+                trimmed = currentStr;
+                break;
+            }
+            words.pop();
+        }
+        cleaned = trimmed;
+    }
 
     return cleaned;
 }
@@ -789,10 +845,15 @@ function renderTable() {
             const gradeClass = item.grade !== '-' ? `grade-${item.grade}` : 'grade-none';
             const percentText = getGradePercent(item.grade);
 
+            const isNeedCheck = item.intentText === '출제의도 내용 확인 필요';
+            const intentDisplay = isNeedCheck 
+                ? `<span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>${item.intentText}</span>` 
+                : item.intentText;
+
             tbody.innerHTML += `
                 <tr>
                     <td class="text-center"><span class="badge-q">${item.qNum}번</span></td>
-                    <td class="fw-bold">${item.intentText}</td>
+                    <td class="fw-bold">${intentDisplay}</td>
                     <td class="text-center">
                         <span class="badge-grade ${gradeClass}">${item.grade}</span>
                     </td>
