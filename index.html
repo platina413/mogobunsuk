@@ -174,10 +174,11 @@
             letter-spacing: 0.5px;
             padding: 10px 16px;
             border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
         }
 
         .table tbody td {
-            padding: 8px 16px;
+            padding: 10px 16px;
             color: #334155;
             border-bottom: 1px solid #f1f5f9;
             font-size: 0.95rem;
@@ -192,23 +193,26 @@
         }
 
         .badge-q {
+            display: inline-block;
             background-color: #f1f5f9;
             color: #334155;
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-weight: 700;
-            font-size: 0.82rem;
-            border: 1px solid #cbd5e1;
-        }
-
-        /* 등급 뱃지 스타일 - 글자가 길어지므로 폭을 자동 조절 가능하게 변경 */
-        .badge-grade {
-            display: inline-block;
             padding: 4px 10px;
             border-radius: 6px;
-            font-weight: 800;
-            font-size: 0.82rem;
+            font-weight: 700;
+            font-size: 0.85rem;
+            border: 1px solid #cbd5e1;
             white-space: nowrap;
+        }
+
+        .badge-grade {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            line-height: 32px;
+            text-align: center;
+            border-radius: 8px;
+            font-weight: 800;
+            font-size: 0.95rem;
         }
 
         .grade-A { background-color: #dcfce7; color: #166534; }
@@ -255,25 +259,23 @@
 
 <div class="container" style="max-width: 900px;">
     <div class="main-card">
-        <!-- 헤더 영역 -->
         <div class="text-center mb-4">
             <h2 class="header-title mb-2">모의고사 출제 의도 및 정답률 자동 분석기</h2>
             <p class="text-muted fs-6 mb-0">모의고사 해설지 파일(PDF) 과 답지반응률 파일(xlsx)를 업로드하면 해당 과목의 정답률이 자동으로 추출됩니다 :) </p>
         </div>
 
-        <!-- 최상단: 과목 선택 영역 -->
         <div class="subject-select-card mb-4">
             <label for="subjectSelect" class="form-label fw-bold text-dark mb-2">
                 <i class="bi bi-bookmark-star-fill text-primary me-1"></i> 분석 대상 과목 선택
             </label>
             <select class="form-select form-select-custom" id="subjectSelect" onchange="checkReady()">
                 <option value="" selected disabled>-- 분석할 과목을 선택하세요 --</option>
-                <option value="국어">국어</option>
-                <option value="수학">수학</option>
-                <option value="영어">영어</option>
-                <option value="한국사">한국사</option>
-                <option value="사회탐구">사회탐구</option>
-                <option value="과학탐구">과학탐구</option>
+                <option value="국어">국어 (45문항)</option>
+                <option value="수학">수학 (30문항)</option>
+                <option value="영어">영어 (45문항)</option>
+                <option value="한국사">한국사 (20문항)</option>
+                <option value="사회탐구">사회탐구 (20문항)</option>
+                <option value="과학탐구">과학탐구 (20문항)</option>
             </select>
 
             <div class="warning-notice-box">
@@ -282,7 +284,6 @@
             </div>
         </div>
 
-        <!-- 파일 드롭존 영역 -->
         <div class="row g-3 mb-4">
             <div class="col-md-6">
                 <div class="drop-zone" id="pdfDropZone" onclick="document.getElementById('pdfInput').click()">
@@ -306,24 +307,20 @@
             </div>
         </div>
 
-        <!-- 버튼 영역 -->
         <div class="text-center mb-4">
             <button class="btn btn-custom" id="analyzeBtn" onclick="processAnalysis()" disabled>
                 <i class="bi bi-magic me-2"></i>데이터 분석 실행
             </button>
         </div>
 
-        <!-- 로딩 애니메이션 -->
         <div id="loading" class="text-center my-4" style="display: none;">
             <div class="spinner-border text-primary mb-2" role="status" style="width: 2.2rem; height: 2.2rem;"></div>
             <p class="text-dark fw-bold mb-0" id="loadingText">문서 파싱 및 정답률 데이터 연동 중...</p>
         </div>
 
-        <!-- 대시보드 결과 영역 -->
         <div id="resultSection" style="display: none;">
             <hr class="my-4" style="border-color: var(--border-color);">
 
-            <!-- 정렬 및 다운로드 컨트롤 바 -->
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div class="btn-group" role="group">
                     <button type="button" class="btn btn-sm btn-outline-secondary fw-bold active" id="btnSortNum" onclick="sortData('num')">
@@ -343,7 +340,6 @@
                 </div>
             </div>
             
-            <!-- 이미지 캡처 대상 영역 -->
             <div id="exportImageTarget">
                 <div class="row g-3 mb-3">
                     <div class="col-6">
@@ -364,20 +360,23 @@
                             </div>
                             <div>
                                 <div class="text-muted small fw-bold">연동 완료 문항</div>
-                                <div class="fs-5 fw-bold text-dark"><span id="totalCount">0</span> <span class="fs-6 fw-normal text-muted">개</span></div>
+                                <div class="fs-5 fw-bold text-dark"><span id="totalCount">0</span> <span class="fs-6 fw-normal text-muted" id="maxCountNotice">개</span></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 분석 결과 데이터 테이블 -->
                 <div class="custom-table-container">
                     <table class="table align-middle" id="resultTable">
                         <thead>
                             <tr>
-                                <th style="width: 12%;" class="text-center">문항</th>
-                                <th>출제의도</th>
-                                <th style="width: 28%;" class="text-center">학교 정답률</th>
+                                <th style="width: 12%;" rowspan="2" class="text-center align-middle">문항</th>
+                                <th rowspan="2" class="align-middle">출제의도</th>
+                                <th colspan="2" class="text-center border-bottom-0">학교 정답률</th>
+                            </tr>
+                            <tr>
+                                <th style="width: 12%;" class="text-center bg-light">등급</th>
+                                <th style="width: 25%;" class="text-center bg-light">기준</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -386,7 +385,6 @@
             </div>
         </div>
 
-        <!-- 푸터 -->
         <div class="footer-credit">
             <div class="footer-combined">
                 <i class="bi bi-shield-lock-fill text-warning"></i>
@@ -411,19 +409,26 @@ let currentCombinedData = [];
 
 const TARGET_SUBJECTS = ['국어', '수학', '영어', '한국사', '사회탐구', '과학탐구'];
 
-// 알파벳 등급을 퍼센트 구간 텍스트로 변환하는 매핑 객체
-const GRADE_MAP_TEXT = {
-    'A': 'A: 80%이상',
-    'B': 'B: 60%이상 80%미만',
-    'C': 'C: 40%이상 60%미만',
-    'D': 'D: 20%이상 40%미만',
-    'E': 'E: 20%미만'
+const SUBJECT_MAX_QUESTIONS = {
+    '국어': 45,
+    '수학': 30,
+    '영어': 45,
+    '한국사': 20,
+    '사회탐구': 20,
+    '과학탐구': 20
 };
 
-// 등급 알파벳을 치환해주는 헬퍼 함수
-function getGradeDisplayText(grade) {
+const GRADE_PERCENT_MAP = {
+    'A': '80% 이상',
+    'B': '60% 이상 80% 미만',
+    'C': '40% 이상 60% 미만',
+    'D': '20% 이상 40% 미만',
+    'E': '20% 미만'
+};
+
+function getGradePercent(grade) {
     if (!grade || grade === '-') return '-';
-    return GRADE_MAP_TEXT[grade.toUpperCase()] || grade;
+    return GRADE_PERCENT_MAP[grade.toUpperCase()] || '-';
 }
 
 setupDropZone('pdfDropZone', 'pdfInput', (file) => handlePdf(file));
@@ -473,15 +478,23 @@ async function processAnalysis() {
 
     try {
         const pdfText = await readPdfText(pdfFile);
-        pdfIntents = parseIntents(pdfText);
-
+        pdfIntents = parseIntents(pdfText, selectedSubject);
         excelSchoolGrades = await readXlsxSchoolGrades(xlsxFile, selectedSubject);
 
-        currentCombinedData = pdfIntents.map(item => ({
-            qNum: item.qNum,
-            intentText: item.intentText,
-            grade: excelSchoolGrades[item.qNum] || '-'
-        }));
+        const maxQ = SUBJECT_MAX_QUESTIONS[selectedSubject] || 45;
+        const intentMap = {};
+        pdfIntents.forEach(item => {
+            intentMap[item.qNum] = item.intentText;
+        });
+
+        currentCombinedData = [];
+        for (let q = 1; q <= maxQ; q++) {
+            currentCombinedData.push({
+                qNum: q,
+                intentText: intentMap[q] || '출제의도 내용 확인 필요',
+                grade: excelSchoolGrades[q] || '-'
+            });
+        }
 
         displayResults();
     } catch (err) {
@@ -512,42 +525,86 @@ async function readPdfText(file) {
     return fullText;
 }
 
-// 수학 및 전 과목 [출제의도] '~기' 종료 지점 정밀 파싱 로직
-function parseIntents(text) {
-    const regex = /(\d+)\s*\.\s*\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?기)(?=\s|\r|\n|$)/g;
-    let matches = [];
+function parseIntents(text, subject) {
+    const maxQuestions = SUBJECT_MAX_QUESTIONS[subject] || 45;
+    const uniqueMap = new Map();
+
+    const cleanText = text.replace(/\r\n/g, '\n');
+
+    // 1단계: 복합 문항 [1~3], 1~3. 패스
+    const rangeRegex = /(?:\[\s*(\d+)\s*[\~\-～]\s*(\d+)\s*\]|(\d+)\s*[\~\-～]\s*(\d+)\s*\.)[\s\S]*?\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?)(?=(?:\[\s*해\s*설\s*\]|\[\s*정\s*답\s*\]|\n\s*\[?\s*\d+|\n\s*\d+\s*\.|$))/g;
     let match;
+    while ((match = rangeRegex.exec(cleanText)) !== null) {
+        const startQ = parseInt(match[1] || match[3]);
+        const endQ = parseInt(match[2] || match[4]);
+        let intentText = cleanIntentText(match[5], subject);
 
-    while ((match = regex.exec(text)) !== null) {
-        const qNum = parseInt(match[1]);
-        let intentText = match[2].trim();
-
-        intentText = intentText.replace(/\s+/g, ' ');
-
-        if (qNum >= 1 && qNum <= 80 && intentText.length > 0) {
-            matches.push({ qNum, intentText });
-        }
-    }
-
-    if (matches.length === 0) {
-        const fallbackRegex = /(\d+)\s*\.\s*\[\s*출\s*제\s*의\s*도\s*\]\s*([^\r\n]+)/g;
-        while ((match = fallbackRegex.exec(text)) !== null) {
-            const qNum = parseInt(match[1]);
-            let intentText = match[2].trim().replace(/\s+/g, ' ');
-            if (qNum >= 1 && qNum <= 80 && intentText.length > 0) {
-                matches.push({ qNum, intentText });
+        if (!isNaN(startQ) && !isNaN(endQ) && startQ <= maxQuestions && intentText) {
+            for (let q = startQ; q <= Math.min(endQ, maxQuestions); q++) {
+                if (!uniqueMap.has(q)) uniqueMap.set(q, intentText);
             }
         }
     }
 
-    const uniqueMap = new Map();
-    matches.forEach(m => {
-        if (!uniqueMap.has(m.qNum)) uniqueMap.set(m.qNum, m.intentText);
-    });
+    // 2단계: 단일 문항 [1], 1., 01. 패스
+    const singleRegex = /(?:\[\s*0*(\d+)\s*\]|\b0*(\d+)\s*\.)[\s\S]{0,100}?\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?)(?=(?:\[\s*해\s*설\s*\]|\[\s*정\s*답\s*\]|\n\s*\[?\s*\d+|\n\s*\d+\s*\.|$))/g;
+    while ((match = singleRegex.exec(cleanText)) !== null) {
+        const qNum = parseInt(match[1] || match[2]);
+        let intentText = cleanIntentText(match[3], subject);
+
+        if (!isNaN(qNum) && qNum >= 1 && qNum <= maxQuestions && intentText) {
+            if (!uniqueMap.has(qNum)) uniqueMap.set(qNum, intentText);
+        }
+    }
+
+    // 3단계: [출제의도] 키워드 기반 뒤쪽 탐색 (Fallback)
+    if (uniqueMap.size < maxQuestions) {
+        const fallbackRegex = /0*(\d+)\s*[\.\)]\s*\[\s*출\s*제\s*의\s*도\s*\]\s*([^\n]+)/g;
+        while ((match = fallbackRegex.exec(cleanText)) !== null) {
+            const qNum = parseInt(match[1]);
+            let intentText = cleanIntentText(match[2], subject);
+            if (!isNaN(qNum) && qNum >= 1 && qNum <= maxQuestions && intentText) {
+                if (!uniqueMap.has(qNum)) uniqueMap.set(qNum, intentText);
+            }
+        }
+    }
 
     return Array.from(uniqueMap.entries())
                 .map(([qNum, intentText]) => ({ qNum, intentText }))
                 .sort((a, b) => a.qNum - b.qNum);
+}
+
+// 과목별 문장 끝 정제 함수
+function cleanIntentText(text, subject) {
+    if (!text) return '';
+    let cleaned = text.replace(/\s+/g, ' ').trim();
+    
+    // 섹션 구분 태그 제거
+    cleaned = cleaned.split(/\[\s*(?:해\s*설|정\s*답|오\s*답\s*피\s*하기|출\s*제)\s*\]/)[0].trim();
+
+    if (subject === '국어') {
+        // 국어: '~파악', '~이해', '~적용', '~추론' 등 명사형 어미로 잘라내기
+        const korPattern = /^([가-힣\s\(\)\,\.\~\-\`\'\"]+?(?:파악|이해|적용|추론|비판|분석|감상|비교|반영|생성|구상|점검|조율|수정|활용|인지))/;
+        const match = cleaned.match(korPattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    } else {
+        // 수학, 영어, 한국사, 사회탐구, 과학탐구: '~하기', '~파악하기', '~이해하기', '~구하기', '~알기' 등 '~기' 어미로 잘라내기
+        const giPattern = /^([가-힣0-9\s\(\)\,\.\~\-\`\'\"\+\-\*\/\=\<\>A-Za-z]+?[가-힣]기(?:\.|\b))/;
+        const match = cleaned.match(giPattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+
+    // 예외 상황: 온표(.) 기준 자르기
+    const firstDotIdx = cleaned.indexOf('.');
+    if (firstDotIdx !== -1 && firstDotIdx < 100) {
+        return cleaned.substring(0, firstDotIdx + 1).trim();
+    }
+
+    return cleaned.length > 70 ? cleaned.substring(0, 70).trim() : cleaned;
 }
 
 function readXlsxSchoolGrades(file, targetSubject) {
@@ -622,8 +679,6 @@ function readXlsxSchoolGrades(file, targetSubject) {
                             const qNumVal = parseInt(String(row[qNumColIdx]).trim());
 
                             if (!isNaN(qNumVal) && qNumVal >= 1 && qNumVal <= 80) {
-                                if (targetSubject === '한국사' && qNumVal > 20) continue;
-
                                 let extractedGrade = '';
 
                                 if (schoolColIdx !== -1 && row[schoolColIdx] !== undefined) {
@@ -702,7 +757,8 @@ function exportToExcel() {
     const excelData = currentCombinedData.map(item => ({
         '문항 번호': `${item.qNum}번`,
         '출제의도': item.intentText,
-        '학교 정답률': getGradeDisplayText(item.grade) // 엑셀 다운로드 시에도 변경된 텍스트 적용
+        '학교 정답률 등급': item.grade !== '-' ? item.grade : '-',
+        '학교 정답률 기준': getGradePercent(item.grade)
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
@@ -712,7 +768,8 @@ function exportToExcel() {
     worksheet['!cols'] = [
         { wch: 12 },
         { wch: 50 },
-        { wch: 25 }
+        { wch: 18 },
+        { wch: 22 }
     ];
 
     const fileName = `${selectedSubject}_출제의도_정답률_분석결과.xlsx`;
@@ -724,18 +781,21 @@ function renderTable() {
     tbody.innerHTML = '';
 
     if (currentCombinedData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger p-3">추출된 [출제의도] 정보가 없습니다. PDF 파일 구조를 확인해 주세요.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger p-3">추출된 [출제의도] 정보가 없습니다. PDF 파일 구조를 확인해 주세요.</td></tr>';
     } else {
         currentCombinedData.forEach(item => {
             const gradeClass = item.grade !== '-' ? `grade-${item.grade}` : 'grade-none';
-            const displayText = getGradeDisplayText(item.grade); // 매핑 함수 적용
+            const percentText = getGradePercent(item.grade);
 
             tbody.innerHTML += `
                 <tr>
                     <td class="text-center"><span class="badge-q">${item.qNum}번</span></td>
                     <td class="fw-bold">${item.intentText}</td>
                     <td class="text-center">
-                        <span class="badge-grade ${gradeClass}">${displayText}</span>
+                        <span class="badge-grade ${gradeClass}">${item.grade}</span>
+                    </td>
+                    <td class="text-center fw-semibold text-secondary">
+                        ${percentText}
                     </td>
                 </tr>
             `;
@@ -744,8 +804,10 @@ function renderTable() {
 }
 
 function displayResults() {
-    document.getElementById('extractedSubject').innerText = selectedSubject;
+    const maxQ = SUBJECT_MAX_QUESTIONS[selectedSubject] || 45;
+    document.getElementById('extractedSubject').innerText = `${selectedSubject} (${maxQ}문항)`;
     document.getElementById('totalCount').innerText = currentCombinedData.length;
+    document.getElementById('maxCountNotice').innerText = ` / ${maxQ}개 완료`;
     
     sortData('num');
     
