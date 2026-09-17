@@ -477,8 +477,7 @@ async function processAnalysis() {
     document.getElementById('resultSection').style.display = 'none';
 
     try {
-        const pdfText = await readPdfText(pdfFile);
-        pdfIntents = parseIntents(pdfText, selectedSubject);
+        pdfIntents = await readPdfNounIntents(pdfFile, selectedSubject);
         excelSchoolGrades = await readXlsxSchoolGrades(xlsxFile, selectedSubject);
 
         const maxQ = SUBJECT_MAX_QUESTIONS[selectedSubject] || 45;
@@ -504,70 +503,87 @@ async function processAnalysis() {
     }
 }
 
-async function readPdfText(file) {
+// 명사형 종결 단어 및 줄바꿈 Y좌표 조합 정교 파서
+async function readPdfNounIntents(file, subject) {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = '';
+    const maxQuestions = SUBJECT_MAX_QUESTIONS[subject] || 45;
+    const uniqueMap = new Map();
 
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        let lastY, text = '';
-        for (let item of textContent.items) {
-            if (lastY !== undefined && Math.abs(item.transform[5] - lastY) > 5) {
-                text += '\n';
-            }
-            text += item.str + ' ';
-            lastY = item.transform[5];
-        }
-        fullText += text + '\n';
-    }
-    return fullText;
-}
+        const items = textContent.items;
 
-function parseIntents(text, subject) {
-    const maxQuestions = SUBJECT_MAX_QUESTIONS[subject] || 45;
-    const uniqueMap = new Map();
-    const cleanText = text.replace(/\r\n/g, '\n');
+        let isCollecting = false;
+        let currentQList = [];
+        let collectedText = '';
+        let startY = null;
 
-    const regex = /(?:\[\s*(\d+)\s*[\~\-～,]\s*(\d+)\s*\]|\[\s*0*(\d+)\s*\]|\b0*(\d+)\s*[\.\)])[\s\S]*?\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?)(?=(?:\[\s*해\s*설\s*\]|\[\s*정\s*답\s*\]|\[\s*오\s*답\s*\]|\[\s*대\s*본\s*\]|\n\s*\[?\s*\d+[\.\s\~\-～\]]|$))/g;
-    
-    let match;
-    while ((match = regex.exec(cleanText)) !== null) {
-        const startQ = parseInt(match[1]);
-        const endQ = parseInt(match[2]);
-        const singleQ = parseInt(match[3] || match[4]);
-        const rawIntent = match[5];
+        for (let j = 0; j < items.length; j++) {
+            const item = items[j];
+            const text = item.str.trim();
+            const currentY = item.transform[5];
 
-        const cleanedIntent = cleanIntentText(rawIntent, subject);
-        if (!cleanedIntent) continue;
+            if (!text) continue;
 
-        if (!isNaN(startQ) && !isNaN(endQ) && startQ <= maxQuestions) {
-            for (let q = startQ; q <= Math.min(endQ, maxQuestions); q++) {
-                if (!uniqueMap.has(q)) uniqueMap.set(q, cleanedIntent);
-            }
-        } else if (!isNaN(singleQ) && singleQ >= 1 && singleQ <= maxQuestions) {
-            if (!uniqueMap.has(singleQ)) uniqueMap.set(singleQ, cleanedIntent);
-        }
-    }
-
-    if (uniqueMap.size < maxQuestions) {
-        const fallbackRegex = /(?:\[?\s*(\d+)\s*[\~\-～,]\s*(\d+)\s*\]?|\b0*(\d+)\b)\s*[\.\)]?\s*\[\s*출\s*제\s*의\s*도\s*\]\s*([^\n]+)/g;
-        while ((match = fallbackRegex.exec(cleanText)) !== null) {
-            const startQ = parseInt(match[1]);
-            const endQ = parseInt(match[2]);
-            const singleQ = parseInt(match[3]);
-            const cleanedIntent = cleanIntentText(match[4], subject);
-
-            if (!cleanedIntent) continue;
-
-            if (!isNaN(startQ) && !isNaN(endQ) && startQ <= maxQuestions) {
-                for (let q = startQ; q <= Math.min(endQ, maxQuestions); q++) {
-                    if (!uniqueMap.has(q)) uniqueMap.set(q, cleanedIntent);
+            // [출제의도] 태그 발견
+            if (text.includes('출제') && text.includes('의도')) {
+                currentQList = [];
+                for (let k = Math.max(0, j - 6); k < j; k++) {
+                    const prevStr = items[k].str;
+                    const rangeMatch = prevStr.match(/\[?\s*(\d+)\s*[\~\-～,]\s*(\d+)\s*\]?/);
+                    const singleMatch = prevStr.match(/(?:\[\s*0*(\d+)\s*\]|\b0*(\d+)\b[\.\)]?)/);
+                    
+                    if (rangeMatch) {
+                        const start = parseInt(rangeMatch[1]);
+                        const end = parseInt(rangeMatch[2]);
+                        for (let q = start; q <= end; q++) currentQList.push(q);
+                    } else if (singleMatch) {
+                        const q = parseInt(singleMatch[1] || singleMatch[2]);
+                        if (q) currentQList.push(q);
+                    }
                 }
-            } else if (!isNaN(singleQ) && singleQ >= 1 && singleQ <= maxQuestions) {
-                if (!uniqueMap.has(singleQ)) uniqueMap.set(singleQ, cleanedIntent);
+
+                isCollecting = true;
+                collectedText = '';
+                startY = currentY;
+                continue;
             }
+
+            if (isCollecting) {
+                // 줄바꿈 발생 여부 감지 (Y좌표가 5pt 이상 차이나면 줄바꿈으로 인정)
+                const isLineChanged = startY !== null && Math.abs(currentY - startY) > 5;
+                const isExplanationHeader = /\[\s*(해\s*설|정\s*답|오\s*답|대\s*본|소\s*재|풀\s*이)\s*\]/.test(text);
+
+                // 명사형 종결 단어 패턴 감지
+                const nounEnded = /(이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|파악하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기|이해|구하기|탐구|분석|도출|해석|적용|계산|설명|증명|파악|추론|관찰|수집|분류|작성|설정|설계|유도|비교|감상|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택)/.test(collectedText);
+
+                if (isExplanationHeader || (isLineChanged && nounEnded)) {
+                    isCollecting = false;
+                    if (collectedText && currentQList.length > 0) {
+                        const finalCleanText = cleanNounIntentText(collectedText);
+                        currentQList.forEach(q => {
+                            if (q >= 1 && q <= maxQuestions && !uniqueMap.has(q)) {
+                                uniqueMap.set(q, finalCleanText);
+                            }
+                        });
+                    }
+                    collectedText = '';
+                    currentQList = [];
+                } else {
+                    collectedText += ' ' + text;
+                }
+            }
+        }
+
+        if (isCollecting && collectedText && currentQList.length > 0) {
+            const finalCleanText = cleanNounIntentText(collectedText);
+            currentQList.forEach(q => {
+                if (q >= 1 && q <= maxQuestions && !uniqueMap.has(q)) {
+                    uniqueMap.set(q, finalCleanText);
+                }
+            });
         }
     }
 
@@ -576,50 +592,21 @@ function parseIntents(text, subject) {
                 .sort((a, b) => a.qNum - b.qNum);
 }
 
-function cleanIntentText(text, subject) {
+function cleanNounIntentText(text) {
     if (!text) return '';
-
     let cleaned = text.replace(/\s+/g, ' ').trim();
 
-    // 1. [해설], [정답], [대본] 등 태그 및 < 보기 >, <보기> 시작 지점 이전으로 자르기
-    cleaned = cleaned.split(/\[\s*(?:해\s*설|정\s*답|오\s*답\s*피\s*하기|출\s*제\s*영\s*역|대\s*본|소\s*재)\s*\]/)[0].trim();
-    cleaned = cleaned.split(/<\s*보\s*기\s*>/)[0].trim();
-    cleaned = cleaned.split(/<\s*조\s*건\s*>/)[0].trim();
-
-    // 2. 국어 과목 특화 종결 키워드 파이프라인
-    if (subject === '국어') {
-        const korVerbRegex = /(수립|제시|파악|이해|적용|추론|비판|분석|감상|비교|반영|생성|구상|점검|조율|수정|활용|인지|평가|설명)/;
-        const match = cleaned.match(korVerbRegex);
-        if (match && match.index !== undefined) {
-            return cleaned.substring(0, match.index + match[0].length).trim();
-        }
-    }
-
-    // 3. 영어 과목 종결 처리
-    if (subject === '영어') {
-        const engVerbIdx = cleaned.search(/(파악|이해|추론|찾기|완성|듣고|선택|파악하기|이해하기|추론하기)/);
-        if (engVerbIdx !== -1) {
-            const wordMatch = cleaned.substring(engVerbIdx).match(/^(파악하기|이해하기|추론하기|찾기|완성하기|파악|이해|추론|선택|듣고)/);
-            if (wordMatch) {
-                return cleaned.substring(0, engVerbIdx + wordMatch[0].length).trim();
-            }
-        }
-    }
-
-    // 4. 한국사/탐구/수학 명사형 종결 동작어 절단
-    const verbRegex = /(설정하기|설계하기|이해하기|알아보기|구하기|유도하기|비교하기|파악하기|분석하기|적용하기|추론하기|관찰하기|수집하기|분류하기|상관관계|작성하기|설명하기|해석하기|계산하기|탐구하기|증명하기|도출하기)/;
-    const match = cleaned.match(verbRegex);
+    // 명사형/동작 종결어가 탐지되면 그 단어까지만 깔끔하게 잘라내기
+    const nounEndingRegex = /(이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|파악하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기|이해|구하기|탐구|분석|도출|해석|적용|계산|설명|증명|파악|추론|관찰|수집|분류|작성|설정|설계|유도|비교|감상|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택)/;
+    const match = cleaned.match(nounEndingRegex);
     if (match && match.index !== undefined) {
-        return cleaned.substring(0, match.index + match[0].length).trim();
+        cleaned = cleaned.substring(0, match.index + match[0].length).trim();
     }
 
-    // 마침표 기준 첫 문장만 절단
-    const firstDotIdx = cleaned.indexOf('.');
-    if (firstDotIdx !== -1 && firstDotIdx < 100) {
-        return cleaned.substring(0, firstDotIdx).trim();
-    }
+    // 깨진 특수문자/수식 외계어 정제
+    cleaned = cleaned.replace(/[^가-힣0-9\s\(\)\,\~\-\+\*\/=\<\>A-Za-z]/g, '').trim();
 
-    return cleaned.replace(/[^가-힣0-9\s\(\)\,\~\-\+\*\/=\<\>A-Za-z]/g, '').trim();
+    return cleaned;
 }
 
 function readXlsxSchoolGrades(file, targetSubject) {
