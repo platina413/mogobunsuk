@@ -528,43 +528,38 @@ async function readPdfText(file) {
 function parseIntents(text, subject) {
     const maxQuestions = SUBJECT_MAX_QUESTIONS[subject] || 45;
     const uniqueMap = new Map();
-
     const cleanText = text.replace(/\r\n/g, '\n');
 
-    // 1단계: 복합 문항 [1~3], 1~3. 패스
-    const rangeRegex = /(?:\[\s*(\d+)\s*[\~\-～]\s*(\d+)\s*\]|(\d+)\s*[\~\-～]\s*(\d+)\s*\.)[\s\S]*?\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?)(?=(?:\[\s*해\s*설\s*\]|\[\s*정\s*답\s*\]|\n\s*\[?\s*\d+|\n\s*\d+\s*\.|$))/g;
+    // 출제의도 블록 정규식 탐색
+    const regex = /(?:\[\s*(\d+)\s*[\~\-～]\s*(\d+)\s*\]|\[\s*0*(\d+)\s*\]|\b0*(\d+)\s*\.)[\s\S]*?\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?)(?=(?:\[\s*해\s*설\s*\]|\[\s*정\s*답\s*\]|\[\s*오\s*답\s*\]|\n\s*\[?\s*\d+[\.\s\]]|$))/g;
+    
     let match;
-    while ((match = rangeRegex.exec(cleanText)) !== null) {
-        const startQ = parseInt(match[1] || match[3]);
-        const endQ = parseInt(match[2] || match[4]);
-        let intentText = cleanIntentText(match[5], subject);
+    while ((match = regex.exec(cleanText)) !== null) {
+        const startQ = parseInt(match[1]);
+        const endQ = parseInt(match[2]);
+        const singleQ = parseInt(match[3] || match[4]);
+        const rawIntent = match[5];
 
-        if (!isNaN(startQ) && !isNaN(endQ) && startQ <= maxQuestions && intentText) {
+        const cleanedIntent = cleanIntentText(rawIntent, subject);
+        if (!cleanedIntent) continue;
+
+        if (!isNaN(startQ) && !isNaN(endQ) && startQ <= maxQuestions) {
             for (let q = startQ; q <= Math.min(endQ, maxQuestions); q++) {
-                if (!uniqueMap.has(q)) uniqueMap.set(q, intentText);
+                if (!uniqueMap.has(q)) uniqueMap.set(q, cleanedIntent);
             }
+        } else if (!isNaN(singleQ) && singleQ >= 1 && singleQ <= maxQuestions) {
+            if (!uniqueMap.has(singleQ)) uniqueMap.set(singleQ, cleanedIntent);
         }
     }
 
-    // 2단계: 단일 문항 [1], 1., 01. 패스
-    const singleRegex = /(?:\[\s*0*(\d+)\s*\]|\b0*(\d+)\s*\.)[\s\S]{0,100}?\[\s*출\s*제\s*의\s*도\s*\]\s*([\s\S]*?)(?=(?:\[\s*해\s*설\s*\]|\[\s*정\s*답\s*\]|\n\s*\[?\s*\d+|\n\s*\d+\s*\.|$))/g;
-    while ((match = singleRegex.exec(cleanText)) !== null) {
-        const qNum = parseInt(match[1] || match[2]);
-        let intentText = cleanIntentText(match[3], subject);
-
-        if (!isNaN(qNum) && qNum >= 1 && qNum <= maxQuestions && intentText) {
-            if (!uniqueMap.has(qNum)) uniqueMap.set(qNum, intentText);
-        }
-    }
-
-    // 3단계: [출제의도] 키워드 기반 뒤쪽 탐색 (Fallback)
+    // 2차 백업 탐색 (키워드 매칭)
     if (uniqueMap.size < maxQuestions) {
         const fallbackRegex = /0*(\d+)\s*[\.\)]\s*\[\s*출\s*제\s*의\s*도\s*\]\s*([^\n]+)/g;
         while ((match = fallbackRegex.exec(cleanText)) !== null) {
             const qNum = parseInt(match[1]);
-            let intentText = cleanIntentText(match[2], subject);
-            if (!isNaN(qNum) && qNum >= 1 && qNum <= maxQuestions && intentText) {
-                if (!uniqueMap.has(qNum)) uniqueMap.set(qNum, intentText);
+            const cleanedIntent = cleanIntentText(match[2], subject);
+            if (!isNaN(qNum) && qNum >= 1 && qNum <= maxQuestions && cleanedIntent) {
+                if (!uniqueMap.has(qNum)) uniqueMap.set(qNum, cleanedIntent);
             }
         }
     }
@@ -574,37 +569,41 @@ function parseIntents(text, subject) {
                 .sort((a, b) => a.qNum - b.qNum);
 }
 
-// 과목별 문장 끝 정제 함수
+// 엄격한 출제의도 종결어 처리 함수
 function cleanIntentText(text, subject) {
     if (!text) return '';
+
+    // 불필요한 공백/줄바꿈 정리
     let cleaned = text.replace(/\s+/g, ' ').trim();
-    
-    // 섹션 구분 태그 제거
-    cleaned = cleaned.split(/\[\s*(?:해\s*설|정\s*답|오\s*답\s*피\s*하기|출\s*제)\s*\]/)[0].trim();
+
+    // 다음 섹션 키워드가 나오면 그 즉시 잘라냄
+    cleaned = cleaned.split(/\[\s*(?:해\s*설|정\s*답|오\s*답\s*피\s*하기|출\s*제\s*영\s*역)\s*\]/)[0].trim();
 
     if (subject === '국어') {
-        // 국어: '~파악', '~이해', '~적용', '~추론' 등 명사형 어미로 잘라내기
-        const korPattern = /^([가-힣\s\(\)\,\.\~\-\`\'\"]+?(?:파악|이해|적용|추론|비판|분석|감상|비교|반영|생성|구상|점검|조율|수정|활용|인지))/;
-        const match = cleaned.match(korPattern);
-        if (match && match[1]) {
-            return match[1].trim();
+        // 국어: 명사형 종결 키워드 (파악, 이해, 적용, 추론, 비판, 분석, 감상, 비교, 반영, 생성, 구상, 점검, 조율, 수정, 활용, 인지 등)
+        const korMatch = cleaned.match(/^([가-힣0-9\s\(\)\,\.\~\-\`\'\"]+?(?:파악|이해|적용|추론|비판|분석|감상|비교|반영|생성|구상|점검|조율|수정|활용|인지))/);
+        if (korMatch && korMatch[1]) {
+            return korMatch[1].trim();
         }
     } else {
-        // 수학, 영어, 한국사, 사회탐구, 과학탐구: '~하기', '~파악하기', '~이해하기', '~구하기', '~알기' 등 '~기' 어미로 잘라내기
-        const giPattern = /^([가-힣0-9\s\(\)\,\.\~\-\`\'\"\+\-\*\/\=\<\>A-Za-z]+?[가-힣]기(?:\.|\b))/;
-        const match = cleaned.match(giPattern);
-        if (match && match[1]) {
-            return match[1].trim();
+        // 수학, 영어, 한국사, 사회탐구, 과학탐구: '~하기', '~알기', '~구하기', '~이해하기', '~파악하기' 등 '~기' 어미로 정확히 종결
+        // '기' 뒤에 마침표, 공백, 숫자, 영문, 한글 단어 경계가 시작될 때 잘라냄
+        const giMatch = cleaned.match(/^([가-힣0-9\s\(\)\,\.\~\-\`\'\"\+\-\*\/\=\<\>A-Za-z]+?[가-힣]기)(?:[\.\s\b]|$)/);
+        if (giMatch && giMatch[1]) {
+            let res = giMatch[1].trim();
+            // 끝에 마침표 제거
+            if (res.endsWith('.')) res = res.slice(0, -1).trim();
+            return res;
         }
     }
 
-    // 예외 상황: 온표(.) 기준 자르기
+    // 예외 처리: 첫 마침표까지 자르기
     const firstDotIdx = cleaned.indexOf('.');
-    if (firstDotIdx !== -1 && firstDotIdx < 100) {
-        return cleaned.substring(0, firstDotIdx + 1).trim();
+    if (firstDotIdx !== -1 && firstDotIdx < 80) {
+        return cleaned.substring(0, firstDotIdx).trim();
     }
 
-    return cleaned.length > 70 ? cleaned.substring(0, 70).trim() : cleaned;
+    return cleaned.length > 60 ? cleaned.substring(0, 60).trim() : cleaned;
 }
 
 function readXlsxSchoolGrades(file, targetSubject) {
