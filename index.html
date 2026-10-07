@@ -239,7 +239,7 @@ function detectSubjectFromHsj(pages){
   return null;
 }
 function parseIntents(pages){
-  const RE=/^\s*(\d{1,2})\s*[.)]?\s*\[\s*출\s*제\s*의\s*도\s*\]\s*(.*)$/;
+  const RE=/^\s*(\d{1,2})(?:\s*[~∼～\-–]\s*(\d{1,2}))?\s*[.)]?\s*\[\s*출\s*제\s*의\s*도\s*\]\s*(.*)$/;
   const out={},dup=[];
   pages.forEach(L=>{
     // 이 페이지 본문 단(column) 폭 추정: 긴 줄들의 너비 중 큰 값 쪽
@@ -247,17 +247,30 @@ function parseIntents(pages){
     const colW=ws.length?ws[Math.floor(ws.length*0.9)]:0;
     for(let i=0;i<L.length;i++){
       const m=L[i].t.match(RE);if(!m)continue;
-      const n=+m[1];let text=m[2].trim();
+      const n=+m[1],n2=m[2]?+m[2]:n;let text=m[3].trim();
       let j=i,guard=0;
       // 제목 줄이 단 끝까지 찼으면 다음 줄로 이어진 것
-      while(colW&&(L[j].end-L[j].x)>=colW-10&&j+1<L.length&&guard<2){
-        const nx=L[j+1].t.trim();
-        if(RE.test(nx)||nx.length>colW/6)break;
-        text+=(/[가-힣]$/.test(text)&&/^[가-힣]/.test(nx)?" ":" ")+nx;j++;guard++;
+      // 제목이 다음 줄로 넘어갔는지 판단 (출제의도는 보통 '~하기, 파악, 이해'처럼 끝난다)
+      const ENDING=/(하기|파악|이해|추론|감상|적용|판단|수립|생성|전략|수정|제시|탐구|비교|분석|설명|평가|도출|설계|해석|설정|수행)$/;
+      const GLUE=/^(하기|하여|하는|하고|되지|되는|되어|들의|들이|들을|시키|적인)/;
+      while(j+1<L.length&&guard<2){
+        const nx=L[j+1].t.replace(/\s+/g," ").trim();
+        if(!nx||RE.test(nx)||nx.length>26||/다\.|[.。]$|^[\[(<①-⑮ㄱ-ㅎ※]/.test(nx))break;
+        const full=colW&&(L[j].end-L[j].x)>=colW-12;
+        const glue=GLUE.test(nx);
+        if(ENDING.test(text)&&!(glue&&nx.length<=4))break;   // 이미 끝난 제목 (단, '탐구/하기'처럼 갈린 경우는 이어 붙임)
+        if(!(full||glue||ENDING.test(nx)))break;
+        text+=(glue?"":" ")+nx;j++;guard++;
       }
       text=text.replace(/\s+/g," ").trim();
-      if(out[n]){dup.push(n);continue;}
-      out[n]=text;
+      // 묶음 문항(예: 16~17번)은 쉼표로 나뉜 출제의도를 순서대로 한 문항씩 나눠 준다
+      const nums=[];for(let k=n;k<=n2&&k<n+6;k++)nums.push(k);
+      const parts=text.split(/\s*,\s*/);
+      nums.forEach((k,idx)=>{
+        const t=nums.length>1&&parts.length===nums.length?parts[idx]:text;
+        if(out[k]){dup.push(k);return;}
+        out[k]=t;
+      });
     }
   });
   return {intents:out,dup};
