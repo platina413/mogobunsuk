@@ -1,881 +1,478 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>모의고사 출제 의도 및 정답률 자동 분석기</title>
-    <!-- Bootstrap 5.3 CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Pretendard 폰트 & Bootstrap Icons -->
-    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    
-    <!-- PDF.js, SheetJS, html2canvas 라이브러리 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    
-    <style>
-        :root {
-            --bg-main: #f1f5f9;
-            --card-bg: #ffffff;
-            --primary-color: #3b82f6;
-            --primary-hover: #2563eb;
-            --text-title: #0f172a;
-            --text-body: #475569;
-            --border-color: #e2e8f0;
-        }
-
-        body {
-            background-color: var(--bg-main);
-            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-            color: var(--text-body);
-            padding: 40px 20px;
-        }
-
-        .main-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
-            padding: 36px;
-        }
-
-        .header-title {
-            color: var(--text-title);
-            font-weight: 800;
-            letter-spacing: -0.5px;
-        }
-
-        .subject-select-card {
-            background-color: #f8fafc;
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            padding: 18px 20px;
-        }
-
-        .form-select-custom {
-            border-radius: 10px;
-            border: 1px solid #cbd5e1;
-            padding: 10px 14px;
-            font-size: 1rem;
-            font-weight: 700;
-            color: #1e293b;
-            box-shadow: none !important;
-        }
-
-        .form-select-custom:focus {
-            border-color: var(--primary-color);
-        }
-
-        .warning-notice-box {
-            margin-top: 12px;
-            background-color: rgba(239, 68, 68, 0.08);
-            border: 1px solid rgba(239, 68, 68, 0.25);
-            border-radius: 8px;
-            padding: 9px 14px;
-            color: #dc2626;
-            font-size: 0.86rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .drop-zone {
-            border: 2px dashed #cbd5e1;
-            border-radius: 14px;
-            padding: 24px 16px;
-            text-align: center;
-            background-color: #f8fafc;
-            cursor: pointer;
-            transition: all 0.25s ease-in-out;
-            position: relative;
-        }
-
-        .drop-zone:hover {
-            border-color: var(--primary-color);
-            background-color: #eff6ff;
-            transform: translateY(-2px);
-        }
-
-        .drop-zone.loaded {
-            border-color: #10b981;
-            background-color: #f0fdf4;
-        }
-
-        .icon-box {
-            width: 46px;
-            height: 46px;
-            border-radius: 12px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.3rem;
-            margin-bottom: 8px;
-        }
-
-        .pdf-box { background-color: #dbeafe; color: #1d4ed8; }
-        .xlsx-box { background-color: #dcfce7; color: #15803d; }
-        
-        .drop-zone.loaded .icon-box {
-            background-color: #bbf7d0;
-            color: #166534;
-        }
-
-        .btn-custom {
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 12px 32px;
-            font-weight: 700;
-            font-size: 1rem;
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
-            transition: all 0.2s ease;
-        }
-
-        .btn-custom:hover:not(:disabled) {
-            background: linear-gradient(135deg, #1d4ed8, #1e40af);
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
-        }
-
-        .btn-custom:disabled {
-            background: #cbd5e1;
-            box-shadow: none;
-            cursor: not-allowed;
-        }
-
-        .summary-card {
-            background: #f8fafc;
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 14px 20px;
-        }
-
-        .custom-table-container {
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            overflow: hidden;
-            background: white;
-        }
-
-        .table {
-            margin-bottom: 0;
-        }
-
-        .table thead th {
-            background-color: #f8fafc;
-            color: #64748b;
-            font-weight: 700;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 10px 16px;
-            border-bottom: 1px solid var(--border-color);
-            white-space: nowrap;
-        }
-
-        .table tbody td {
-            padding: 10px 16px;
-            color: #334155;
-            border-bottom: 1px solid #f1f5f9;
-            font-size: 0.95rem;
-        }
-
-        .table tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        .table tbody tr:hover {
-            background-color: #f8fafc;
-        }
-
-        .badge-q {
-            display: inline-block;
-            background-color: #f1f5f9;
-            color: #334155;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-weight: 700;
-            font-size: 0.85rem;
-            border: 1px solid #cbd5e1;
-            white-space: nowrap;
-        }
-
-        .badge-grade {
-            display: inline-block;
-            width: 32px;
-            height: 32px;
-            line-height: 32px;
-            text-align: center;
-            border-radius: 8px;
-            font-weight: 800;
-            font-size: 0.95rem;
-        }
-
-        .grade-A { background-color: #dcfce7; color: #166534; }
-        .grade-B { background-color: #dbeafe; color: #1e40af; }
-        .grade-C { background-color: #fef9c3; color: #854d0e; }
-        .grade-D { background-color: #ffedd5; color: #9a3412; }
-        .grade-E { background-color: #ffe4e6; color: #9f1239; }
-        .grade-none { background-color: #f1f5f9; color: #94a3b8; }
-
-        .footer-credit {
-            margin-top: 36px;
-            padding-top: 20px;
-            border-top: 1px solid var(--border-color);
-            text-align: center;
-        }
-        
-        .footer-combined {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 8px;
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            color: #64748b;
-            font-size: 0.8rem;
-            padding: 6px 16px;
-            border-radius: 20px;
-        }
-        
-        .footer-divider {
-            color: #cbd5e1;
-            font-weight: 300;
-        }
-
-        #exportImageTarget {
-            padding: 10px;
-            background-color: #ffffff;
-            border-radius: 16px;
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>모의고사 문항 분석기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one narrow working column — setup card (과목 · 파일 · 실행) above a results sheet styled like an exam answer key */
+:root{
+  --bg:#f3f4f7; --surface:#ffffff; --sunk:#f7f8fa; --ink:#1a1e27; --muted:#5d6574; --line:#dfe3ea;
+  --accent:#b02a5c; --accent-ink:#ffffff; --accent-tint:#fbeef3;
+  --ok:#1f7a4f; --ok-tint:#e7f4ec; --warn:#9a5b00; --warn-tint:#fdf3e1; --err:#b3261e; --err-tint:#fdecea;
+  --gA:#1f7a4f; --gA-t:#e4f3ea; --gB:#2d6aa8; --gB-t:#e6eff9; --gC:#8a6d00; --gC-t:#fbf3d6; --gD:#b4561a; --gD-t:#fcebdf; --gE:#b3261e; --gE-t:#fbe5e3;
+  --font:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:10px; --shield:#e0a800;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12141a; --surface:#1b1e26; --sunk:#161920; --ink:#e8eaf0; --muted:#a2a9b6; --line:#2e333e;
+  --accent:#e0719a; --accent-ink:#1a0d13; --accent-tint:#3a1a27;
+  --ok:#6cc79a; --ok-tint:#173225; --warn:#e7b660; --warn-tint:#352812; --err:#f08a80; --err-tint:#3a1a18;
+  --gA:#6cc79a; --gA-t:#173225; --gB:#7fb2ea; --gB-t:#182a3f; --gC:#e2c25a; --gC-t:#332b11; --gD:#eb9a62; --gD-t:#3a2416; --gE:#f08a80; --gE-t:#3a1a18;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12141a; --surface:#1b1e26; --sunk:#161920; --ink:#e8eaf0; --muted:#a2a9b6; --line:#2e333e;
+  --accent:#e0719a; --accent-ink:#1a0d13; --accent-tint:#3a1a27;
+  --ok:#6cc79a; --ok-tint:#173225; --warn:#e7b660; --warn-tint:#352812; --err:#f08a80; --err-tint:#3a1a18;
+  --gA:#6cc79a; --gA-t:#173225; --gB:#7fb2ea; --gB-t:#182a3f; --gC:#e2c25a; --gC-t:#332b11; --gD:#eb9a62; --gD-t:#3a2416; --gE:#f08a80; --gE-t:#3a1a18;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.55;margin:0}
+.wrap{max-width:980px;margin:0 auto;padding:32px 16px 64px;display:flex;flex-direction:column;gap:20px}
+header h1{font-size:26px;line-height:1.25;margin:0 0 6px;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:0;color:var(--muted);word-break:keep-all}
+header p span{display:block}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+.setup{display:flex;flex-direction:column;gap:18px}
+.label{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.02em;margin-bottom:8px;display:block}
+select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink)}
+select:focus-visible,button:focus-visible,.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.drops{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:640px){.drops{grid-template-columns:1fr}}
+.drop{position:relative;border:1.5px dashed var(--line);border-radius:12px;padding:18px 16px;background:var(--sunk);display:flex;gap:14px;align-items:center;cursor:pointer;min-width:0;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent)}
+.drop.done{border-style:solid;border-color:var(--ok);background:var(--ok-tint)}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.dicon{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--muted);color:var(--muted);font-family:var(--mono);font-size:15px}
+.drop.done .dicon{border-color:var(--ok);background:var(--ok);color:var(--surface)}
+.dtext{min-width:0}
+.dtext b{display:block;font-weight:600}
+.dtext span{display:block;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{border-radius:var(--r);padding:10px 14px;font-size:14px;display:flex;gap:8px;align-items:flex-start}
+.note.warn{background:var(--warn-tint);color:var(--warn)}
+.note.err{background:var(--err-tint);color:var(--err)}
+.note.ok{background:var(--ok-tint);color:var(--ok)}
+.note.info{background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.note strong{font-weight:600}
+.run{display:flex;justify-content:center}
+.btn{font:inherit;font-weight:600;border-radius:var(--r);padding:10px 16px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);padding:13px 28px;font-size:16px}
+.btn.primary:hover{filter:brightness(1.05)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.results{display:flex;flex-direction:column;gap:16px}
+.reshead{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{font:inherit;font-size:14px;border:0;background:var(--surface);color:var(--muted);padding:8px 12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface);font-weight:600}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.actions .btn{font-size:14px;padding:8px 12px}
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:16px}
+.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.summary{grid-template-columns:1fr}}
+.stat{background:var(--sunk);border-radius:var(--r);padding:12px 14px;min-width:0}
+.stat small{display:block;font-size:12px;color:var(--muted);letter-spacing:.03em}
+.stat b{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat b em{font-style:normal;font-size:14px;color:var(--muted);font-weight:500}
+.dist{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.dist span{font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.dist span b{font-size:13px}
+.sheettitle{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.sheettitle h2{font-size:18px;margin:0;font-weight:700}
+.sheettitle span{font-size:13px;color:var(--muted)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-variant-numeric:tabular-nums}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+thead th{background:var(--sunk);font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.02em;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td.num{white-space:nowrap}
+.qno{display:inline-block;min-width:44px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-weight:600;font-size:13.5px;background:var(--surface)}
+td.intent{font-weight:500}
+td.intent.missing{color:var(--err);font-weight:500}
+td.c{text-align:center}
+.ans{font-size:18px;line-height:1}
+.ans.short{font-family:var(--mono);font-size:14px}
+.pct{font-family:var(--mono);font-size:14px}
+.pct.na{color:var(--muted);font-family:var(--font);font-size:13px}
+.g{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:7px;font-weight:700;font-size:14px}
+.g.A{background:var(--gA-t);color:var(--gA)} .g.B{background:var(--gB-t);color:var(--gB)} .g.C{background:var(--gC-t);color:var(--gC)} .g.D{background:var(--gD-t);color:var(--gD)} .g.E{background:var(--gE-t);color:var(--gE)}
+.g.nat{width:26px;height:26px;font-size:12.5px;background:transparent;border:1px solid var(--line);color:var(--muted)}
+.crit{font-size:13px;color:var(--muted);white-space:nowrap}
+.flag{color:var(--err);font-size:12px;display:block}
+td.empty{text-align:center;color:var(--muted);padding:48px 16px;line-height:1.8}
+.foot{font-size:12.5px;color:var(--muted);margin:0}
+.credit{border-top:1px solid var(--line);padding-top:20px;display:flex;justify-content:center}
+.credit .pill{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 12px;border:1px solid var(--line);background:var(--sunk);border-radius:999px;padding:8px 18px;font-size:13px;color:var(--muted);text-align:center;max-width:100%}
+.credit svg{flex:none}
+.credit .sep{width:1px;height:14px;background:var(--line)}
+@media (max-width:640px){.credit .pill{border-radius:14px}.credit .sep{display:none}}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:var(--r);font-size:14px;z-index:9;max-width:calc(100% - 32px)}
+.spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
 </head>
 <body>
 
-<div class="container" style="max-width: 900px;">
-    <div class="main-card">
-        <div class="text-center mb-4">
-            <h2 class="header-title mb-2">모의고사 출제 의도 및 정답률 자동 분석기</h2>
-            <p class="text-muted fs-6 mb-0">모의고사 해설지 파일(PDF) 과 답지반응률 파일(xlsx)를 업로드하면 해당 과목의 정답률이 자동으로 추출됩니다 :) </p>
-        </div>
+<div class="wrap">
+  <header>
+    <h1>모의고사 문항 분석기</h1>
+    <p><span>해설지 PDF와 답지반응률 PDF를 올리면 선택한 과목의 문항별 출제의도와 학교 정답률을 한 표로 정리해요.</span> <span>파일은 이 브라우저 안에서만 읽고 어디에도 보내지 않아요.</span></p>
+  </header>
 
-        <div class="subject-select-card mb-4">
-            <label for="subjectSelect" class="form-label fw-bold text-dark mb-2">
-                <i class="bi bi-bookmark-star-fill text-primary me-1"></i> 분석 대상 과목 선택
-            </label>
-            <select class="form-select form-select-custom" id="subjectSelect" onchange="checkReady()">
-                <option value="" selected disabled>-- 분석할 과목을 선택하세요 --</option>
-                <option value="국어">국어 (45문항)</option>
-                <option value="수학">수학 (30문항)</option>
-                <option value="영어">영어 (45문항)</option>
-                <option value="한국사">한국사 (20문항)</option>
-                <option value="사회탐구">사회탐구 (20문항)</option>
-                <option value="과학탐구">과학탐구 (20문항)</option>
-            </select>
-
-            <div class="warning-notice-box">
-                <i class="bi bi-exclamation-triangle-fill flex-shrink-0 fs-6"></i>
-                <span>분석할 과목을 올바르게 선택했는지 한 번 더 확인 부탁드립니다. 불일치 시 분석 오류가 발생할 수 있어요 :(</span>
-            </div>
-        </div>
-
-        <div class="row g-3 mb-4">
-            <div class="col-md-6">
-                <div class="drop-zone" id="pdfDropZone" onclick="document.getElementById('pdfInput').click()">
-                    <div class="icon-box pdf-box" id="pdfIcon">
-                        <i class="bi bi-file-earmark-pdf-fill"></i>
-                    </div>
-                    <h6 class="fw-bold text-dark mb-1">1. 모의고사 해설지 (PDF)</h6>
-                    <p class="text-muted small mb-0" id="pdfFileName">클릭하거나 모의고사 해설지 PDF를 올려주세요</p>
-                    <input type="file" id="pdfInput" accept="application/pdf" style="display: none;" onchange="handlePdf(this.files[0])">
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="drop-zone" id="xlsxDropZone" onclick="document.getElementById('xlsxInput').click()">
-                    <div class="icon-box xlsx-box" id="xlsxIcon">
-                        <i class="bi bi-file-earmark-excel-fill"></i>
-                    </div>
-                    <h6 class="fw-bold text-dark mb-1">2. 답지반응률 파일 (XLSX)</h6>
-                    <p class="text-muted small mb-0" id="xlsxFileName">클릭하거나 XLSX 파일을 올려주세요</p>
-                    <input type="file" id="xlsxInput" accept=".xlsx, .xls" style="display: none;" onchange="handleXlsx(this.files[0])">
-                </div>
-            </div>
-        </div>
-
-        <div class="text-center mb-4">
-            <button class="btn btn-custom" id="analyzeBtn" onclick="processAnalysis()" disabled>
-                <i class="bi bi-magic me-2"></i>데이터 분석 실행
-            </button>
-        </div>
-
-        <div id="loading" class="text-center my-4" style="display: none;">
-            <div class="spinner-border text-primary mb-2" role="status" style="width: 2.2rem; height: 2.2rem;"></div>
-            <p class="text-dark fw-bold mb-0" id="loadingText">문서 파싱 및 정답률 데이터 연동 중...</p>
-        </div>
-
-        <div id="resultSection" style="display: none;">
-            <hr class="my-4" style="border-color: var(--border-color);">
-
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold active" id="btnSortNum" onclick="sortData('num')">
-                        <i class="bi bi-sort-numeric-down me-1"></i>문항순 정렬
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" id="btnSortGrade" onclick="sortData('grade')">
-                        <i class="bi bi-sort-alpha-down me-1"></i>정답률 오름차순 (A-E)
-                    </button>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-sm btn-outline-primary fw-bold px-3" onclick="exportToImage()">
-                        <i class="bi bi-file-earmark-image me-1"></i>이미지(PNG)로 저장
-                    </button>
-                    <button class="btn btn-sm btn-success fw-bold px-3" onclick="exportToExcel()">
-                        <i class="bi bi-file-earmark-excel me-1"></i>엑셀로 다운로드
-                    </button>
-                </div>
-            </div>
-            
-            <div id="exportImageTarget">
-                <div class="row g-3 mb-3">
-                    <div class="col-6">
-                        <div class="summary-card d-flex align-items-center">
-                            <div class="rounded-circle p-2 bg-white border me-3 text-primary fs-5">
-                                <i class="bi bi-journal-bookmark-fill"></i>
-                            </div>
-                            <div>
-                                <div class="text-muted small fw-bold">선택된 과목</div>
-                                <div class="fs-5 fw-bold text-dark" id="extractedSubject">-</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="summary-card d-flex align-items-center">
-                            <div class="rounded-circle p-2 bg-white border me-3 text-success fs-5">
-                                <i class="bi bi-check-circle-fill"></i>
-                            </div>
-                            <div>
-                                <div class="text-muted small fw-bold">연동 완료 문항</div>
-                                <div class="fs-5 fw-bold text-dark"><span id="totalCount">0</span> <span class="fs-6 fw-normal text-muted" id="maxCountNotice">개</span></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="custom-table-container">
-                    <table class="table align-middle" id="resultTable">
-                        <thead>
-                            <tr>
-                                <th style="width: 12%;" rowspan="2" class="text-center align-middle">문항</th>
-                                <th rowspan="2" class="align-middle">출제의도</th>
-                                <th colspan="2" class="text-center border-bottom-0">학교 정답률</th>
-                            </tr>
-                            <tr>
-                                <th style="width: 12%;" class="text-center bg-light">등급</th>
-                                <th style="width: 25%;" class="text-center bg-light">기준</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="footer-credit">
-            <div class="footer-combined">
-                <i class="bi bi-shield-lock-fill text-warning"></i>
-                <span>본 프로그램은 대동고등학교 내에서만 사용해 주시기 바라며, 외부 유출을 금합니다.</span>
-                <span class="footer-divider">|</span>
-                <span>Designed & Developed by 유지인(대동고등학교)</span>
-            </div>
-        </div>
-
+  <section class="card setup" aria-label="분석 설정">
+    <div>
+      <label class="label" for="subject">분석할 과목</label>
+      <select id="subject">
+        <option value="국어">국어 (45문항)</option>
+        <option value="수학">수학 (30문항)</option>
+        <option value="영어">영어 (45문항)</option>
+        <option value="한국사">한국사 (20문항)</option>
+        <option value="사회탐구">사회탐구 (25문항)</option>
+        <option value="과학탐구">과학탐구 (25문항)</option>
+      </select>
     </div>
+    <div>
+      <span class="label">파일 올리기</span>
+      <div class="drops">
+        <label class="drop" id="dropH">
+          <input type="file" id="fileH" accept="application/pdf,.pdf" aria-label="해설지 PDF 선택">
+          <div class="dicon" aria-hidden="true">1</div>
+          <div class="dtext"><b>모의고사 해설지 (PDF)</b><span id="nameH">눌러서 고르거나 끌어다 놓기</span></div>
+        </label>
+        <label class="drop" id="dropR">
+          <input type="file" id="fileR" accept="application/pdf,.pdf" aria-label="답지반응률 PDF 선택">
+          <div class="dicon" aria-hidden="true">2</div>
+          <div class="dtext"><b>답지반응률 (PDF)</b><span id="nameR">눌러서 고르거나 끌어다 놓기</span></div>
+        </label>
+      </div>
+    </div>
+    <div id="notes" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div class="run"><button class="btn primary" id="runBtn" disabled>분석 실행</button></div>
+  </section>
+
+  <section class="results" aria-label="분석 결과">
+    <div class="reshead">
+      <div class="seg" role="group" aria-label="정렬">
+        <button id="sortNo" aria-pressed="true">문항순</button>
+        <button id="sortLow" aria-pressed="false">정답률 낮은순</button>
+        <button id="sortHigh" aria-pressed="false">정답률 높은순</button>
+      </div>
+      <div class="actions">
+        <button class="btn" id="copyBtn">표 복사</button>
+        <button class="btn" id="pngBtn">이미지(PNG) 저장</button>
+        <button class="btn" id="xlsxBtn">엑셀로 저장</button>
+      </div>
+    </div>
+    <div class="sheet" id="sheet">
+      <div class="sheettitle"><h2 id="sheetTitle">분석 결과</h2><span id="sheetSub"></span></div>
+      <div class="summary">
+        <div class="stat"><small>과목</small><b id="stSubj">-</b></div>
+        <div class="stat"><small>출제의도 연결</small><b id="stLinked">-</b></div>
+        <div class="stat"><small>학교 정답률 등급 분포</small><div class="dist" id="stDist"></div></div>
+      </div>
+      <div id="resNotes" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>문항</th><th>출제의도</th><th style="text-align:center">정답</th><th style="text-align:center">학교 정답률</th><th style="text-align:center">학교 등급</th><th style="text-align:center">전국 등급</th><th>등급 기준</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <p class="foot">정답률 등급 A 80% 이상 · B 60~80% · C 40~60% · D 20~40% · E 20% 미만 (답지반응률 표 기준). 학교 정답률 %는 답지반응률에서 정답 번호를 고른 학생 비율이며, 단답형은 등급만 제공돼요.</p>
+    </div>
+  </section>
+  <footer class="credit">
+    <div class="pill">
+      <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><path d="M7 0.6 13 2.9v4.6c0 3.9-2.6 6.9-6 7.9-3.4-1-6-4-6-7.9V2.9z" fill="var(--shield)"/><rect x="6.2" y="4" width="1.6" height="5" rx=".8" fill="var(--surface)"/><circle cx="7" cy="11" r=".95" fill="var(--surface)"/></svg>
+      <span>본 프로그램은 대동고등학교 내에서만 사용해 주시기 바라며, 외부 유출을 금합니다.</span>
+      <span class="sep" aria-hidden="true"></span>
+      <span>Designed by 유지인(대동고등학교) · AI-assisted Development</span>
+    </div>
+  </footer>
 </div>
+<div class="toast" id="toast" hidden></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+"use strict";
+const SUBJECTS={"국어":45,"수학":30,"영어":45,"한국사":20,"사회탐구":25,"과학탐구":25};
+const CRIT={A:"80% 이상",B:"60% 이상 80% 미만",C:"40% 이상 60% 미만",D:"20% 이상 40% 미만",E:"20% 미만"};
+const CIRCLE=["","①","②","③","④","⑤"];
+const GRADES=["A","B","C","D","E"];
+const $=id=>document.getElementById(id);
 
-let pdfFile = null;
-let xlsxFile = null;
-let pdfIntents = [];
-let excelSchoolGrades = {};
-let selectedSubject = '';
-let currentCombinedData = [];
+/* ---------- PDF → 줄 단위 텍스트 ---------- */
+if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";}
+async function pdfLines(buf){
+  const doc=await pdfjsLib.getDocument({data:buf}).promise;
+  const pages=[];
+  for(let i=1;i<=doc.numPages;i++){
+    const tc=await (await doc.getPage(i)).getTextContent();
+    const L=[];let cur=null;
+    for(const it of tc.items){
+      const x=it.transform[4],y=it.transform[5];
+      if(!cur||it.hasEOL&&!it.str||Math.abs(y-cur.y)>1){cur={x,y,t:"",end:x};L.push(cur);}
+      cur.t+=it.str;
+      if(it.str.trim())cur.end=Math.max(cur.end,x+(it.width||0));
+    }
+    pages.push(L.filter(l=>l.t.trim()));
+  }
+  return pages;
+}
 
-const TARGET_SUBJECTS = ['국어', '수학', '영어', '한국사', '사회탐구', '과학탐구'];
+/* ---------- 해설지: 문항별 출제의도 ---------- */
+function detectSubjectFromHsj(pages){
+  const head=(pages[0]||[]).slice(0,12).map(l=>l.t.replace(/\s+/g,"")).join(" ");
+  if(/한국사영역/.test(head))return "한국사";
+  if(/국어영역/.test(head))return "국어";
+  if(/수학영역/.test(head))return "수학";
+  if(/영어영역/.test(head))return "영어";
+  if(/사회|통합사회/.test(head))return "사회탐구";
+  if(/과학|통합과학/.test(head))return "과학탐구";
+  return null;
+}
+function parseIntents(pages){
+  const RE=/^\s*(\d{1,2})\s*[.)]?\s*\[\s*출\s*제\s*의\s*도\s*\]\s*(.*)$/;
+  const out={},dup=[];
+  pages.forEach(L=>{
+    // 이 페이지 본문 단(column) 폭 추정: 긴 줄들의 너비 중 큰 값 쪽
+    const ws=L.filter(l=>l.t.length>=15).map(l=>l.end-l.x).sort((a,b)=>a-b);
+    const colW=ws.length?ws[Math.floor(ws.length*0.9)]:0;
+    for(let i=0;i<L.length;i++){
+      const m=L[i].t.match(RE);if(!m)continue;
+      const n=+m[1];let text=m[2].trim();
+      let j=i,guard=0;
+      // 제목 줄이 단 끝까지 찼으면 다음 줄로 이어진 것
+      while(colW&&(L[j].end-L[j].x)>=colW-10&&j+1<L.length&&guard<2){
+        const nx=L[j+1].t.trim();
+        if(RE.test(nx)||nx.length>colW/6)break;
+        text+=(/[가-힣]$/.test(text)&&/^[가-힣]/.test(nx)?" ":" ")+nx;j++;guard++;
+      }
+      text=text.replace(/\s+/g," ").trim();
+      if(out[n]){dup.push(n);continue;}
+      out[n]=text;
+    }
+  });
+  return {intents:out,dup};
+}
 
-const SUBJECT_MAX_QUESTIONS = {
-    '국어': 45,
-    '수학': 30,
-    '영어': 45,
-    '한국사': 20,
-    '사회탐구': 20,
-    '과학탐구': 20
+/* ---------- 답지반응률: 과목별 정답·정답률 ---------- */
+function parseResponse(pages){
+  const subjects={};
+  // 한 페이지에 표가 여러 개(예: 한국사 + 사회탐구)일 수 있다.
+  // 문항 번호가 다시 작아지는 곳에서 표를 나누고, 과목 이름이 놓인 높이(y)로 표와 과목을 짝짓는다.
+  pages.forEach(L=>{
+    const labels=[];
+    for(const l of L){const tk=l.t.trim().split(/\s+/);const s=Object.keys(SUBJECTS).find(s=>tk.includes(s));if(s)labels.push({s,y:l.y});}
+    if(!labels.length)return;
+    const segs=[];let seg=null,prev=Infinity;
+    for(const l of L){
+      let tk=l.t.trim().split(/\s+/).filter(t=>!SUBJECTS[t]);
+      if(tk.length<4)continue;
+      const g2=tk[tk.length-1],g1=tk[tk.length-2],ans=tk[tk.length-3];
+      if(!/^[A-E]$/.test(g1)||!/^[A-E]$/.test(g2)||!/^\d+$/.test(tk[0])||!/^\d+$/.test(ans))continue;
+      const n=+tk[0];const mid=tk.slice(1,-3);
+      if(!(mid.length===0||mid.length===10)||!mid.every(v=>/^\d+(\.\d+)?$/.test(v)))continue;
+      const r={no:n,answer:ans,gradeS:g1,gradeN:g2,mc:mid.length===10};
+      if(r.mc){
+        const a=+ans;r.opts=[];for(let k=0;k<5;k++)r.opts.push({s:+mid[2*k],n:+mid[2*k+1]});
+        if(a>=1&&a<=5){r.pctS=r.opts[a-1].s;r.pctN=r.opts[a-1].n;}
+      }
+      if(n<=prev||!seg){seg={rows:{},top:l.y,bot:l.y};segs.push(seg);}
+      seg.rows[n]=r;seg.top=Math.max(seg.top,l.y);seg.bot=Math.min(seg.bot,l.y);prev=n;
+    }
+    segs.forEach(sg=>{
+      let lab=labels.find(a=>a.y<=sg.top+12&&a.y>=sg.bot-12);
+      if(!lab&&segs.length===1&&labels.length===1)lab=labels[0];
+      if(!lab)return;
+      subjects[lab.s]=Object.assign(subjects[lab.s]||{},sg.rows);
+    });
+  });
+  return subjects;
+}
+function gradeOf(p){return p>=80?"A":p>=60?"B":p>=40?"C":p>=20?"D":"E";}
+
+function buildResult(subject,intentsRes,respSubjects,meta){
+  const rows=respSubjects[subject]||{};
+  const nums=Object.keys(rows).map(Number).sort((a,b)=>a-b);
+  const expected=nums.length||SUBJECTS[subject];
+  const list=[];const issues=[];
+  for(let n=1;n<=expected;n++){
+    const r=rows[n];const intent=intentsRes.intents[n]||null;
+    const item={no:n,intent,answer:r?r.answer:null,mc:r?r.mc:false,pctS:r&&r.pctS!=null?r.pctS:null,pctN:r&&r.pctN!=null?r.pctN:null,gradeS:r?r.gradeS:null,gradeN:r?r.gradeN:null,flag:null};
+    if(item.pctS!=null&&item.gradeS&&gradeOf(item.pctS)!==item.gradeS)item.flag="정답률과 등급이 맞지 않아요. 원본을 확인하세요.";
+    list.push(item);
+  }
+  const linked=list.filter(x=>x.intent).length;
+  const noResp=list.filter(x=>!x.gradeS).map(x=>x.no);
+  const noIntent=list.filter(x=>!x.intent).map(x=>x.no);
+  const extra=Object.keys(intentsRes.intents).map(Number).filter(n=>n>expected);
+  if(meta.hsjSubject&&meta.hsjSubject!==subject)issues.push(["err",`해설지는 <strong>${meta.hsjSubject}</strong> 해설지인데 <strong>${subject}</strong>(으)로 분석했어요. 출제의도가 다른 과목 것이니 과목을 다시 선택해 주세요.`]);
+  if(!nums.length)issues.push(["err",`답지반응률 PDF에서 <strong>${subject}</strong> 표를 찾지 못했어요. 과목 선택이나 파일을 확인해 주세요.`]);
+  if(noIntent.length&&noIntent.length<expected)issues.push(["warn",`해설지에서 출제의도를 찾지 못한 문항: <strong>${noIntent.join(", ")}번</strong>`]);
+  if(noIntent.length===expected)issues.push(["err","해설지에서 [출제의도]를 하나도 찾지 못했어요. 해설지 파일이 맞는지 확인해 주세요."]);
+  if(intentsRes.dup.length)issues.push(["warn",`해설지에 같은 번호가 두 번 나와요 (${[...new Set(intentsRes.dup)].join(", ")}번). 첫 번째 것을 썼어요. 선택과목이 섞인 해설지인지 확인해 주세요.`]);
+  if(extra.length)issues.push(["warn",`해설지에 ${expected}번 이후 문항(${extra.join(", ")}번)이 있어요. 과목이 맞는지 확인해 주세요.`]);
+  if(nums.length&&noResp.length)issues.push(["warn",`답지반응률에서 빠진 문항: ${noResp.join(", ")}번`]);
+  const flagged=list.filter(x=>x.flag).map(x=>x.no);
+  if(flagged.length)issues.push(["err",`정답률과 등급이 어긋나는 문항: ${flagged.join(", ")}번`]);
+  if(!issues.length)issues.push(["ok",`${expected}문항 모두 출제의도와 정답률을 연결했어요. 정답률 ${list.filter(x=>x.pctS!=null).length}문항은 등급과 % 값이 서로 맞는지도 확인했어요.`]);
+  return {subject,expected,linked,list,issues,meta};
+}
+
+/* ---------- 화면 ---------- */
+let state={files:{H:null,R:null},result:null,sort:"no",hsjSubject:null};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(msg){const t=$("toast");t.textContent=msg;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2600);}
+function noteHTML([k,m]){return `<div class="note ${k}">${m}</div>`;}
+
+function refreshSetup(){
+  const n=[];
+  const subj=$("subject").value;
+  if(!window.pdfjsLib)n.push(["err","PDF 읽기 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 페이지를 새로 고쳐 주세요."]);
+  if(state.hsjSubject&&state.hsjSubject!==subj)n.push(["warn",`올린 해설지는 <strong>${state.hsjSubject}</strong> 해설지로 보이는데, 선택한 과목은 <strong>${subj}</strong>예요. 과목을 다시 확인해 주세요.`]);
+  else n.push(["info","분석할 과목을 올바르게 선택했는지 한 번 더 확인해 주세요. 과목이 다르면 결과가 틀리게 나와요."]);
+  $("notes").innerHTML=n.map(noteHTML).join("");
+  $("runBtn").disabled=!(state.files.H&&state.files.R&&window.pdfjsLib);
+}
+function setFile(k,file){
+  if(!file)return;
+  if(!/\.pdf$/i.test(file.name)&&file.type!=="application/pdf"){toast("PDF 파일만 올릴 수 있어요.");return;}
+  state.files[k]=file;
+  $("name"+k).textContent=file.name;$("drop"+k).classList.add("done");
+  $("drop"+k).querySelector(".dicon").textContent="✓";
+  if(k==="H"){
+    state.hsjSubject=null;
+    file.arrayBuffer().then(b=>pdfLines(b)).then(p=>{state.hsjSubject=detectSubjectFromHsj(p);if(state.hsjSubject)$("subject").value=state.hsjSubject;refreshSetup();}).catch(()=>{});
+  }
+  refreshSetup();
+}
+["H","R"].forEach(k=>{
+  $("file"+k).addEventListener("change",e=>setFile(k,e.target.files[0]));
+  const d=$("drop"+k);
+  d.addEventListener("dragover",e=>{e.preventDefault();d.classList.add("over");});
+  d.addEventListener("dragleave",()=>d.classList.remove("over"));
+  d.addEventListener("drop",e=>{e.preventDefault();d.classList.remove("over");setFile(k,e.dataTransfer.files[0]);});
+});
+$("subject").addEventListener("change",refreshSetup);
+
+$("runBtn").addEventListener("click",async()=>{
+  const b=$("runBtn");b.disabled=true;b.innerHTML='<span class="spin" aria-hidden="true"></span> 분석 중';
+  try{
+    const [hb,rb]=await Promise.all([state.files.H.arrayBuffer(),state.files.R.arrayBuffer()]);
+    const [hp,rp]=await Promise.all([pdfLines(hb),pdfLines(rb)]);
+    const intents=parseIntents(hp);const resp=parseResponse(rp);
+    const subj=$("subject").value;
+    const title=(rp[0]||[]).find(l=>/답지반응률/.test(l.t));
+    state.result=buildResult(subj,intents,resp,{hsjName:state.files.H.name,respName:state.files.R.name,title:title?title.t.replace(/\s+/g," ").trim():"",found:Object.keys(resp),hsjSubject:detectSubjectFromHsj(hp)});
+    state.result.fromUpload=true;
+    render();toast("분석을 마쳤어요.");
+    $("sheet").scrollIntoView({behavior:"smooth",block:"start"});
+  }catch(err){
+    $("notes").innerHTML=noteHTML(["err","PDF를 읽지 못했어요. 파일이 손상되었거나 암호가 걸려 있는지 확인해 주세요. ("+esc(err.message||err)+")"]);
+  }finally{b.innerHTML="분석 실행";refreshSetup();}
+});
+
+function sorted(list){
+  const a=list.slice();
+  const key=x=>x.pctS!=null?x.pctS:(x.gradeS?{A:90,B:70,C:50,D:30,E:10}[x.gradeS]-0.001:999);
+  if(state.sort==="low")a.sort((p,q)=>key(p)-key(q)||p.no-q.no);
+  if(state.sort==="high")a.sort((p,q)=>key(q)-key(p)||p.no-q.no);
+  return a;
+}
+function ansHTML(x){
+  if(x.answer==null)return '<span class="pct na">-</span>';
+  if(x.mc&&+x.answer>=1&&+x.answer<=5)return `<span class="ans" title="${x.answer}번">${CIRCLE[+x.answer]}</span>`;
+  return `<span class="ans short">${esc(x.answer)}</span>`;
+}
+function render(){
+  const R=state.result;if(!R)return;
+  $("sheetTitle").textContent=`${R.subject} 문항별 출제의도 및 정답률`;
+  $("sheetSub").textContent=R.meta.title||"";
+  $("stSubj").textContent=`${R.subject} (${R.expected}문항)`;
+  $("stLinked").innerHTML=`${R.linked} <em>/ ${R.expected}문항</em>`;
+  const cnt={};GRADES.forEach(g=>cnt[g]=0);R.list.forEach(x=>{if(x.gradeS)cnt[x.gradeS]++;});
+  $("stDist").innerHTML=GRADES.map(g=>`<span><b class="g ${g}" style="width:22px;height:22px;font-size:12px;display:inline-grid">${g}</b> ${cnt[g]}</span>`).join("");
+  $("resNotes").innerHTML=R.issues.map(noteHTML).join("");
+  $("tbody").innerHTML=sorted(R.list).map(x=>`<tr>
+    <td class="num"><span class="qno">${x.no}번</span></td>
+    <td class="intent${x.intent?"":" missing"}">${x.intent?esc(x.intent):"출제의도를 찾지 못함"}</td>
+    <td class="c">${ansHTML(x)}</td>
+    <td class="c">${x.pctS!=null?`<span class="pct">${x.pctS.toFixed(2)}%</span>`:'<span class="pct na">단답형</span>'}${x.flag?`<span class="flag">${esc(x.flag)}</span>`:""}</td>
+    <td class="c">${x.gradeS?`<span class="g ${x.gradeS}">${x.gradeS}</span>`:"-"}</td>
+    <td class="c">${x.gradeN?`<span class="g nat">${x.gradeN}</span>`:"-"}</td>
+    <td class="crit">${x.gradeS?CRIT[x.gradeS]:"-"}</td></tr>`).join("");
+  ["copyBtn","pngBtn","xlsxBtn"].forEach(id=>$(id).disabled=false);
+  ["No","Low","High"].forEach(k=>$("sort"+k).setAttribute("aria-pressed",String(state.sort===k.toLowerCase())));
+}
+$("sortNo").onclick=()=>{state.sort="no";render();};
+$("sortLow").onclick=()=>{state.sort="low";render();};
+$("sortHigh").onclick=()=>{state.sort="high";render();};
+
+/* ---------- 내보내기 ---------- */
+function tableRows(){
+  return sorted(state.result.list).map(x=>({"문항":x.no,"출제의도":x.intent||"(찾지 못함)","정답":x.mc&&+x.answer>=1&&+x.answer<=5?CIRCLE[+x.answer]:(x.answer??""),"학교 정답률(%)":x.pctS!=null?+x.pctS.toFixed(2):"단답형","학교 등급":x.gradeS||"","전국 정답률(%)":x.pctN!=null?+x.pctN.toFixed(2):"","전국 등급":x.gradeN||"","등급 기준":x.gradeS?CRIT[x.gradeS]:""}));
+}
+async function offer(filename,data){
+  let dl=null;try{dl=await window.claude?.use?.("downloads");}catch(e){}
+  if(!dl){
+    // 일반 웹사이트(예: GitHub Pages)에서는 브라우저 다운로드로 저장
+    try{
+      const blob=data instanceof Blob?data:new Blob([data]);
+      const url=URL.createObjectURL(blob);const a=document.createElement("a");
+      a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),4000);toast("저장했어요.");
+    }catch(e){toast("저장하지 못했어요. '표 복사'로 엑셀에 붙여 넣어 주세요.");}
+    return;
+  }
+  try{await dl.save({filename,data});toast("저장했어요.");}
+  catch(e){if(e&&e.code==="declined")toast("저장을 취소했어요.");else toast("저장하지 못했어요. '표 복사'를 써 주세요.");}
+}
+$("xlsxBtn").onclick=async()=>{
+  if(!state.result)return;
+  if(!window.XLSX){toast("엑셀 도구를 불러오지 못했어요. '표 복사'를 써 주세요.");return;}
+  const ws=XLSX.utils.json_to_sheet(tableRows());
+  ws["!cols"]=[{wch:6},{wch:36},{wch:6},{wch:14},{wch:10},{wch:14},{wch:10},{wch:18}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,state.result.subject);
+  const buf=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+  offer(`${state.result.subject}_문항분석.xlsx`,new Blob([buf]));
+};
+$("pngBtn").onclick=async()=>{
+  if(!state.result)return;
+  if(!window.html2canvas){toast("이미지 도구를 불러오지 못했어요.");return;}
+  const bg=getComputedStyle(document.body).backgroundColor;
+  const box=$("sheet").querySelector(".tablebox");const prev=box.style.overflow;box.style.overflow="visible";
+  try{
+    const c=await html2canvas($("sheet"),{scale:2,backgroundColor:bg,windowWidth:Math.max(1000,document.documentElement.clientWidth)});
+    c.toBlob(b=>b?offer(`${state.result.subject}_문항분석.png`,b):toast("이미지를 만들지 못했어요."),"image/png");
+  }finally{box.style.overflow=prev;}
+};
+$("copyBtn").onclick=()=>{
+  if(!state.result)return;
+  const rows=tableRows();const head=Object.keys(rows[0]);
+  const tsv=[head.join("\t"),...rows.map(r=>head.map(h=>r[h]).join("\t"))].join("\n");
+  const fallback=()=>{const ta=document.createElement("textarea");ta.value=tsv;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");toast("복사했어요. 엑셀에 붙여 넣으세요.");}catch(e){toast("복사하지 못했어요.");}ta.remove();};
+  if(navigator.clipboard?.writeText)navigator.clipboard.writeText(tsv).then(()=>toast("복사했어요. 엑셀에 붙여 넣으세요."),fallback);else fallback();
 };
 
-const GRADE_PERCENT_MAP = {
-    'A': '80% 이상',
-    'B': '60% 이상 80% 미만',
-    'C': '40% 이상 60% 미만',
-    'D': '20% 이상 40% 미만',
-    'E': '20% 미만'
-};
-
-function getGradePercent(grade) {
-    if (!grade || grade === '-') return '-';
-    return GRADE_PERCENT_MAP[grade.toUpperCase()] || '-';
+/* ---------- 처음 화면: 예시 결과 ---------- */
+function renderEmpty(){
+  $("sheetSub").textContent="";
+  $("stDist").innerHTML=GRADES.map(g=>`<span><b class="g ${g}" style="width:22px;height:22px;font-size:12px;display:inline-grid">${g}</b> -</span>`).join("");
+  $("tbody").innerHTML=`<tr><td colspan="7" class="empty">위에서 과목을 고르고 해설지와 답지반응률 PDF를 올린 뒤 <b>분석 실행</b>을 누르면<br>여기에 문항별 출제의도와 정답률이 나와요.</td></tr>`;
+  ["copyBtn","pngBtn","xlsxBtn"].forEach(id=>$(id).disabled=true);
 }
-
-setupDropZone('pdfDropZone', 'pdfInput', (file) => handlePdf(file));
-setupDropZone('xlsxDropZone', 'xlsxInput', (file) => handleXlsx(file));
-
-function setupDropZone(zoneId, inputId, handleFn) {
-    const zone = document.getElementById(zoneId);
-    zone.addEventListener('dragover', (e) => e.preventDefault());
-    zone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        if (e.dataTransfer.files.length > 0) handleFn(e.dataTransfer.files[0]);
-    });
-}
-
-function handlePdf(file) {
-    if (!file || file.type !== 'application/pdf') return alert('PDF 파일만 업로드 가능합니다.');
-    pdfFile = file;
-    document.getElementById('pdfFileName').innerText = file.name;
-    document.getElementById('pdfDropZone').classList.add('loaded');
-    document.getElementById('pdfIcon').innerHTML = '<i class="bi bi-check-lg"></i>';
-    checkReady();
-}
-
-function handleXlsx(file) {
-    if (!file) return;
-    xlsxFile = file;
-    document.getElementById('xlsxFileName').innerText = file.name;
-    document.getElementById('xlsxDropZone').classList.add('loaded');
-    document.getElementById('xlsxIcon').innerHTML = '<i class="bi bi-check-lg"></i>';
-    checkReady();
-}
-
-function checkReady() {
-    selectedSubject = document.getElementById('subjectSelect').value;
-    if (selectedSubject && pdfFile && xlsxFile) {
-        document.getElementById('analyzeBtn').disabled = false;
-    } else {
-        document.getElementById('analyzeBtn').disabled = true;
-    }
-}
-
-async function processAnalysis() {
-    if (!selectedSubject) return alert('과목을 선택해 주세요.');
-    
-    document.getElementById('loading').style.display = 'block';
-    document.getElementById('resultSection').style.display = 'none';
-
-    try {
-        pdfIntents = await readPdfNounIntents(pdfFile, selectedSubject);
-        excelSchoolGrades = await readXlsxSchoolGrades(xlsxFile, selectedSubject);
-
-        const maxQ = SUBJECT_MAX_QUESTIONS[selectedSubject] || 45;
-        const intentMap = {};
-        pdfIntents.forEach(item => {
-            intentMap[item.qNum] = item.intentText;
-        });
-
-        currentCombinedData = [];
-        for (let q = 1; q <= maxQ; q++) {
-            currentCombinedData.push({
-                qNum: q,
-                intentText: intentMap[q] || '출제의도 내용 확인 필요',
-                grade: excelSchoolGrades[q] || '-'
-            });
-        }
-
-        displayResults();
-    } catch (err) {
-        alert('분석 도중 오류가 발생했습니다: ' + err.message);
-    } finally {
-        document.getElementById('loading').style.display = 'none';
-    }
-}
-
-async function readPdfNounIntents(file, subject) {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const maxQuestions = SUBJECT_MAX_QUESTIONS[subject] || 45;
-    const uniqueMap = new Map();
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const items = textContent.items;
-
-        let isCollecting = false;
-        let currentQList = [];
-        let collectedText = '';
-        let startY = null;
-
-        for (let j = 0; j < items.length; j++) {
-            const item = items[j];
-            const text = item.str.trim();
-            const currentY = item.transform[5];
-
-            if (!text) continue;
-
-            if (text.includes('출제') && text.includes('의도')) {
-                currentQList = [];
-                
-                // 역탐색 범위 내의 아이템 텍스트 결합
-                const searchBackCount = (subject === '영어') ? 35 : ((subject === '수학') ? 12 : 8);
-                const startIdx = Math.max(0, j - searchBackCount);
-                
-                let combinedPrevStr = "";
-                for (let k = startIdx; k < j; k++) {
-                    combinedPrevStr += " " + items[k].str;
-                }
-
-                // 1) [16~17], 16~17 등 범위 패턴 매칭
-                const rangeMatch = combinedPrevStr.match(/\[?\s*(\d{1,2})\s*[\~\-～,]\s*(\d{1,2})\s*\]?/);
-                if (rangeMatch) {
-                    const start = parseInt(rangeMatch[1]);
-                    const end = parseInt(rangeMatch[2]);
-                    for (let q = start; q <= end; q++) currentQList.push(q);
-                } else {
-                    // 2) 단일 문항 번호 패턴 매칭
-                    const matches = [...combinedPrevStr.matchAll(/(?:\[\s*(\d{1,2})\s*\]|(\d{1,2})\s*[\.\)])/g)];
-                    if (matches.length > 0) {
-                        const lastMatch = matches[matches.length - 1];
-                        const q = parseInt(lastMatch[1] || lastMatch[2]);
-                        if (q) currentQList.push(q);
-                    }
-                }
-
-                isCollecting = true;
-                collectedText = '';
-                startY = currentY;
-                continue;
-            }
-
-            if (isCollecting) {
-                const isLineChanged = startY !== null && Math.abs(currentY - startY) > 5;
-                const isExplanationHeader = /\[\s*(해\s*설|정\s*답|오\s*답|대\s*본|소\s*재|풀\s*이)\s*\]/.test(text);
-                
-                let nounEnded = false;
-                if (subject === '수학') {
-                    nounEnded = /(계산하기|이해하기|활용하기|추론하기|구하기|탐구하기|분석하기|해석하기|적용하기|설명하기|증명하기|파악하기|활용|이용|계산|이해|구하기|추론)/.test(collectedText);
-                } else if (subject === '영어') {
-                    nounEnded = /(판단하기|완성하기|파악하기|고르기|이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기)/.test(collectedText);
-                } else {
-                    // 과학탐구 등 기타 과목의 종결 패턴 보완 (의사소통하기, 의사소통, 이해하기 등 대응)
-                    nounEnded = /(의사소통하기|의사소통|이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|파악하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기|이해|구하기|탐구|분석|도출|해석|적용|계산|설명|증명|파악|추론|관찰|수집|분류|작성|설정|설계|유도|비교|감상|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택)/.test(collectedText);
-                }
-
-                if (isExplanationHeader || (isLineChanged && nounEnded)) {
-                    isCollecting = false;
-                    if (collectedText && currentQList.length > 0) {
-                        const finalCleanText = cleanNounIntentText(collectedText, subject);
-                        currentQList.forEach(q => {
-                            if (q >= 1 && q <= maxQuestions && !uniqueMap.has(q)) {
-                                uniqueMap.set(q, finalCleanText);
-                            }
-                        });
-                    }
-                    collectedText = '';
-                    currentQList = [];
-                } else {
-                    collectedText += ' ' + text;
-                }
-            }
-        }
-
-        if (isCollecting && collectedText && currentQList.length > 0) {
-            const finalCleanText = cleanNounIntentText(collectedText, subject);
-            currentQList.forEach(q => {
-                if (q >= 1 && q <= maxQuestions && !uniqueMap.has(q)) {
-                    uniqueMap.set(q, finalCleanText);
-                }
-            });
-        }
-    }
-
-    return Array.from(uniqueMap.entries())
-                .map(([qNum, intentText]) => ({ qNum, intentText }))
-                .sort((a, b) => a.qNum - b.qNum);
-}
-
-function cleanNounIntentText(text, subject) {
-    if (!text) return '';
-    let cleaned = text.replace(/\s+/g, ' ').trim();
-
-    if (subject === '수학') {
-        cleaned = cleaned.replace(/활용하여\s*.*$/, '활용').replace(/이용하여\s*.*$/, '활용');
-        
-        const mathEndingRegex = /(계산하기|이해하기|활용하기|추론하기|구하기|탐구하기|분석하기|해석하기|적용하기|설명하기|증명하기|파악하기|활용|이용|계산|이해|구하기|추론)/;
-        const matchMath = cleaned.match(mathEndingRegex);
-        if (matchMath && matchMath.index !== undefined) {
-            cleaned = cleaned.substring(0, matchMath.index + matchMath[0].length).trim();
-        }
-        
-        if (cleaned.endsWith('하여')) {
-            cleaned = cleaned.substring(0, cleaned.length - 2) + '하기';
-        }
-        
-        cleaned = cleaned.replace(/^의\s+/, '').trim();
-    } else if (subject === '영어') {
-        const engEndingRegex = /([\uAC00-\uD7A3\s]+?(?:판단하기|완성하기|파악하기|고르기|이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기))/;
-        const matchEng = cleaned.match(engEndingRegex);
-        if (matchEng) {
-            cleaned = matchEng[1].trim();
-        }
-    } else {
-        // 과학탐구 등 일반 과목 종결 패턴 정제 (의사소통하기/의사소통 및 오탈자 대응)
-        const nounEndingRegex = /(의사소통하기|의사소통|이해하기|구하기|탐구하기|분석하기|도출하기|해석하기|적용하기|계산하기|설명하기|증명하기|파악하기|추론하기|관찰하기|수집하기|분류하기|작성하기|설정하기|설계하기|알아보기|유도하기|비교하기|이해|구하기|탐구|분석|도출|해석|적용|계산|설명|증명|파악|추론|관찰|수집|분류|작성|설정|설계|유도|비교|감상|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택)/;
-        const match = cleaned.match(nounEndingRegex);
-        if (match && match.index !== undefined) {
-            cleaned = cleaned.substring(0, match.index + match[0].length).trim();
-        }
-    }
-
-    cleaned = cleaned.replace(/[^가-힣0-9\s\(\)\,\~\-\+\*\/=\<\>A-Za-z]/g, '').trim();
-
-    if (subject === '국어') {
-        let words = cleaned.split(' ');
-        if (words.length > 5) {
-            words = words.slice(0, 5);
-        }
-        
-        let trimmed = words.join(' ');
-        const kNounEndRegex = /(전략|이해|파악|감상|분석|평가|수립|제시|반영|생성|구상|점검|조율|수정|활용|인지|찾기|완성|선택|탐구|도출|해석|적용|계산|설명|증명|추론|관찰|수집|분류|작성|설정|설계|유도|비교)$/;
-        
-        while (words.length > 0) {
-            let currentStr = words.join(' ');
-            if (kNounEndRegex.test(currentStr)) {
-                trimmed = currentStr;
-                break;
-            }
-            words.pop();
-        }
-        cleaned = trimmed;
-    }
-
-    return cleaned;
-}
-
-function readXlsxSchoolGrades(file, targetSubject) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                let gradeMap = {};
-
-                for (let sheetName of workbook.SheetNames) {
-                    const sheet = workbook.Sheets[sheetName];
-                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-
-                    let areaColIdx = -1;
-                    let qNumColIdx = -1;
-                    let schoolColIdx = -1;
-
-                    for (let r = 0; r < Math.min(20, rows.length); r++) {
-                        const row = rows[r];
-                        if (!row) continue;
-
-                        row.forEach((cell, cIdx) => {
-                            const val = String(cell || '').replace(/\s+/g, '');
-                            if (val.includes('영역') || val.includes('과목') || val.includes('교과')) {
-                                if (areaColIdx === -1) areaColIdx = cIdx;
-                            }
-                            if (val.includes('문항') || val.includes('번호') || val === 'NO' || val.includes('문번호')) {
-                                if (qNumColIdx === -1) qNumColIdx = cIdx;
-                            }
-                            if (val.includes('학교') && !val.includes('전국')) {
-                                schoolColIdx = cIdx;
-                            }
-                        });
-                    }
-
-                    if (qNumColIdx === -1) qNumColIdx = 1;
-
-                    let currentArea = '';
-
-                    for (let r = 0; r < rows.length; r++) {
-                        const row = rows[r];
-                        if (!row || row.length === 0) continue;
-
-                        const rowText = row.map(c => String(c || '').replace(/\s+/g, '')).join(' ');
-
-                        if (areaColIdx !== -1 && row[areaColIdx]) {
-                            const cellArea = String(row[areaColIdx]).replace(/\s+/g, '');
-                            if (cellArea) currentArea = cellArea;
-                        }
-
-                        for (let subj of TARGET_SUBJECTS) {
-                            if (rowText.includes(subj)) {
-                                currentArea = subj;
-                                break;
-                            }
-                        }
-
-                        let isTargetRow = false;
-                        if (targetSubject === '한국사') {
-                            if (currentArea.includes('한국사') || rowText.includes('한국사')) {
-                                isTargetRow = true;
-                            }
-                        } else {
-                            if (currentArea.includes(targetSubject)) {
-                                isTargetRow = true;
-                            }
-                        }
-
-                        if (isTargetRow) {
-                            const qNumVal = parseInt(String(row[qNumColIdx]).trim());
-
-                            if (!isNaN(qNumVal) && qNumVal >= 1 && qNumVal <= 80) {
-                                let extractedGrade = '';
-
-                                if (schoolColIdx !== -1 && row[schoolColIdx] !== undefined) {
-                                    const val = String(row[schoolColIdx]).trim().toUpperCase();
-                                    if (/^[A-E]$/.test(val)) {
-                                        extractedGrade = val;
-                                    }
-                                }
-
-                                if (!extractedGrade) {
-                                    for (let c = 0; c < row.length; c++) {
-                                        if (c === areaColIdx || c === qNumColIdx) continue;
-                                        const val = String(row[c] || '').trim().toUpperCase();
-                                        if (/^[A-E]$/.test(val)) {
-                                            extractedGrade = val;
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                if (extractedGrade) {
-                                    gradeMap[qNumVal] = extractedGrade;
-                                }
-                            }
-                        }
-                    }
-                }
-                resolve(gradeMap);
-            } catch (err) {
-                reject(err);
-            }
-        };
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
-    });
-}
-
-function sortData(type) {
-    if (type === 'num') {
-        currentCombinedData.sort((a, b) => a.qNum - b.qNum);
-        document.getElementById('btnSortNum').classList.add('active');
-        document.getElementById('btnSortGrade').classList.remove('active');
-    } else if (type === 'grade') {
-        currentCombinedData.sort((a, b) => {
-            if (a.grade === '-' && b.grade !== '-') return 1;
-            if (a.grade !== '-' && b.grade === '-') return -1;
-            if (a.grade === b.grade) return a.qNum - b.qNum;
-            return a.grade.localeCompare(b.grade);
-        });
-        document.getElementById('btnSortGrade').classList.add('active');
-        document.getElementById('btnSortNum').classList.remove('active');
-    }
-    renderTable();
-}
-
-function exportToImage() {
-    const targetElement = document.getElementById('exportImageTarget');
-    if (!targetElement || currentCombinedData.length === 0) return alert('저장할 데이터가 없습니다.');
-
-    html2canvas(targetElement, {
-        scale: 2,
-        backgroundColor: '#ffffff'
-    }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `${selectedSubject}_출제의도_정답률_분석결과.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    }).catch(err => {
-        alert('이미지 생성 도중 오류가 발생했습니다: ' + err.message);
-    });
-}
-
-function exportToExcel() {
-    if (currentCombinedData.length === 0) return alert('저장할 데이터가 없습니다.');
-
-    const excelData = currentCombinedData.map(item => ({
-        '문항 번호': `${item.qNum}번`,
-        '출제의도': item.intentText,
-        '학교 정답률 등급': item.grade !== '-' ? item.grade : '-',
-        '학교 정답률 기준': getGradePercent(item.grade)
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, selectedSubject);
-
-    worksheet['!cols'] = [
-        { wch: 12 },
-        { wch: 50 },
-        { wch: 18 },
-        { wch: 22 }
-    ];
-
-    const fileName = `${selectedSubject}_출제의도_정답률_분석결과.xlsx`;
-    XLSX.writeFile(workbook, fileName);
-}
-
-function renderTable() {
-    const tbody = document.querySelector('#resultTable tbody');
-    tbody.innerHTML = '';
-
-    if (currentCombinedData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger p-3">추출된 [출제의도] 정보가 없습니다. PDF 파일 구조를 확인해 주세요.</td></tr>';
-    } else {
-        currentCombinedData.forEach(item => {
-            const gradeClass = item.grade !== '-' ? `grade-${item.grade}` : 'grade-none';
-            const percentText = getGradePercent(item.grade);
-
-            const isNeedCheck = item.intentText === '출제의도 내용 확인 필요';
-            const intentDisplay = isNeedCheck 
-                ? `<span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>${item.intentText}</span>` 
-                : item.intentText;
-
-            tbody.innerHTML += `
-                <tr>
-                    <td class="text-center"><span class="badge-q">${item.qNum}번</span></td>
-                    <td class="fw-bold">${intentDisplay}</td>
-                    <td class="text-center">
-                        <span class="badge-grade ${gradeClass}">${item.grade}</span>
-                    </td>
-                    <td class="text-center fw-semibold text-secondary">
-                        ${percentText}
-                    </td>
-                </tr>
-            `;
-        });
-    }
-}
-
-function displayResults() {
-    const maxQ = SUBJECT_MAX_QUESTIONS[selectedSubject] || 45;
-    document.getElementById('extractedSubject').innerText = `${selectedSubject} (${maxQ}문항)`;
-    document.getElementById('totalCount').innerText = currentCombinedData.length;
-    document.getElementById('maxCountNotice').innerText = ` / ${maxQ}개 완료`;
-    
-    sortData('num');
-    
-    document.getElementById('resultSection').style.display = 'block';
-}
+renderEmpty();
+refreshSetup();
+window.__analyzer={parseIntents,parseResponse,pdfLines,buildResult,state};
 </script>
+
 </body>
 </html>
